@@ -36,6 +36,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql
+      - ./migrations/002_v2_modules.sql:/docker-entrypoint-initdb.d/002_v2_modules.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U destino"]
       interval: 5s
