@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/P0l1-0825/Go-destino/internal/config"
 	"github.com/P0l1-0825/Go-destino/internal/handler"
@@ -77,11 +82,40 @@ func main() {
 		flightH, safetyH, wsH,
 	)
 
+	// Graceful shutdown
 	addr := ":" + cfg.Server.Port
-	log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
-	log.Printf("Modules: auth, routes, tickets, bookings, kiosks, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
-
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	// Suppress unused variable warning
+	_ = auditSvc
+
+	go func() {
+		log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
+		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited gracefully")
 }

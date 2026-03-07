@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type BookingStatus string
 
@@ -13,6 +16,30 @@ const (
 	BookingCancelled BookingStatus = "cancelled"
 )
 
+// ValidBookingTransition enforces the booking state machine:
+//
+//	pending → confirmed → assigned → started → completed
+//	pending/confirmed/assigned → cancelled
+func ValidBookingTransition(from, to BookingStatus) error {
+	allowed := map[BookingStatus][]BookingStatus{
+		BookingPending:   {BookingConfirmed, BookingCancelled},
+		BookingConfirmed: {BookingAssigned, BookingCancelled},
+		BookingAssigned:  {BookingStarted, BookingCancelled},
+		BookingStarted:   {BookingCompleted},
+	}
+
+	targets, ok := allowed[from]
+	if !ok {
+		return fmt.Errorf("cannot transition from terminal status %s", from)
+	}
+	for _, t := range targets {
+		if t == to {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid transition: %s → %s", from, to)
+}
+
 type ServiceType string
 
 const (
@@ -21,6 +48,15 @@ const (
 	ServiceVan     ServiceType = "van"
 	ServiceBus     ServiceType = "bus"
 )
+
+// ValidServiceType returns true if the service type is known.
+func ValidServiceType(s string) bool {
+	switch ServiceType(s) {
+	case ServiceTaxi, ServiceShuttle, ServiceVan, ServiceBus:
+		return true
+	}
+	return false
+}
 
 // Booking represents a transport reservation (airport transfer, ride, etc.).
 type Booking struct {
@@ -45,9 +81,11 @@ type Booking struct {
 	Currency        string        `json:"currency" db:"currency"`
 	PaymentID       string        `json:"payment_id,omitempty" db:"payment_id"`
 	FlightNumber    string        `json:"flight_number,omitempty" db:"flight_number"`
+	CancelReason    string        `json:"cancel_reason,omitempty" db:"cancel_reason"`
 	ScheduledAt     *time.Time    `json:"scheduled_at,omitempty" db:"scheduled_at"`
 	StartedAt       *time.Time    `json:"started_at,omitempty" db:"started_at"`
 	CompletedAt     *time.Time    `json:"completed_at,omitempty" db:"completed_at"`
+	CancelledAt     *time.Time    `json:"cancelled_at,omitempty" db:"cancelled_at"`
 	CreatedAt       time.Time     `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time     `json:"updated_at" db:"updated_at"`
 }
@@ -81,4 +119,25 @@ type EstimateResponse struct {
 	Currency   string `json:"currency"`
 	ETAMinutes int    `json:"eta_minutes"`
 	Distance   string `json:"distance"`
+}
+
+// AssignDriverRequest is used to assign a driver+vehicle to a booking.
+type AssignDriverRequest struct {
+	DriverID  string `json:"driver_id"`
+	VehicleID string `json:"vehicle_id"`
+}
+
+// CancelBookingRequest carries an optional reason for cancellation.
+type CancelBookingRequest struct {
+	Reason string `json:"reason"`
+}
+
+// ListBookingsFilter provides filtering for booking queries.
+type ListBookingsFilter struct {
+	TenantID    string
+	UserID      string
+	Status      BookingStatus
+	ServiceType ServiceType
+	Offset      int
+	Limit       int
 }

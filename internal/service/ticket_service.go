@@ -13,6 +13,8 @@ import (
 	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
+const maxTicketsPerPurchase = 20
+
 type TicketService struct {
 	ticketRepo  *repository.TicketRepository
 	routeRepo   *repository.RouteRepository
@@ -32,6 +34,19 @@ func NewTicketService(
 }
 
 func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID string, req domain.PurchaseTicketRequest) (*domain.PurchaseTicketResponse, error) {
+	// Validate quantity
+	if req.Quantity < 1 {
+		return nil, fmt.Errorf("quantity must be at least 1")
+	}
+	if req.Quantity > maxTicketsPerPurchase {
+		return nil, fmt.Errorf("maximum %d tickets per purchase", maxTicketsPerPurchase)
+	}
+
+	// Validate payment method
+	if !domain.ValidPaymentMethod(req.PaymentMethod) {
+		return nil, fmt.Errorf("invalid payment method: %s", req.PaymentMethod)
+	}
+
 	route, err := s.routeRepo.GetByID(ctx, req.RouteID)
 	if err != nil {
 		return nil, fmt.Errorf("route not found: %w", err)
@@ -43,12 +58,13 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 
 	totalAmount := route.PriceCents * int64(req.Quantity)
 
+	// Create payment as pending first
 	payment := &domain.Payment{
 		ID:          uuid.New().String(),
 		TenantID:    tenantID,
 		KioskID:     kioskID,
 		Method:      domain.PaymentMethod(req.PaymentMethod),
-		Status:      domain.PaymentCompleted,
+		Status:      domain.PaymentPending,
 		AmountCents: totalAmount,
 		Currency:    route.Currency,
 	}
@@ -57,6 +73,7 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 		return nil, fmt.Errorf("creating payment: %w", err)
 	}
 
+	// Generate tickets
 	var tickets []domain.Ticket
 	now := time.Now()
 	validUntil := now.Add(24 * time.Hour)
@@ -64,6 +81,8 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 	for i := 0; i < req.Quantity; i++ {
 		qr, err := generateQRCode()
 		if err != nil {
+			// Mark payment as failed if ticket generation fails
+			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, "ticket generation failed")
 			return nil, fmt.Errorf("generating QR code: %w", err)
 		}
 
@@ -82,11 +101,18 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 		}
 
 		if err := s.ticketRepo.Create(ctx, &ticket); err != nil {
+			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, "ticket creation failed")
 			return nil, fmt.Errorf("creating ticket: %w", err)
 		}
 
 		tickets = append(tickets, ticket)
 	}
+
+	// Mark payment as completed after all tickets created
+	if err := s.paymentRepo.UpdateStatus(ctx, payment.ID, domain.PaymentCompleted); err != nil {
+		return nil, fmt.Errorf("completing payment: %w", err)
+	}
+	payment.Status = domain.PaymentCompleted
 
 	return &domain.PurchaseTicketResponse{
 		Tickets: tickets,
@@ -119,6 +145,17 @@ func (s *TicketService) ValidateTicket(ctx context.Context, qrCode string) (*dom
 
 func (s *TicketService) GetByID(ctx context.Context, id string) (*domain.Ticket, error) {
 	return s.ticketRepo.GetByID(ctx, id)
+}
+
+func (s *TicketService) CancelTicket(ctx context.Context, id string) error {
+	ticket, err := s.ticketRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("ticket not found: %w", err)
+	}
+	if ticket.Status != domain.TicketActive {
+		return fmt.Errorf("only active tickets can be cancelled")
+	}
+	return s.ticketRepo.UpdateStatus(ctx, ticket.ID, domain.TicketCanceled)
 }
 
 func generateQRCode() (string, error) {

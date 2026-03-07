@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/P0l1-0825/Go-destino/pkg/geo"
+
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
@@ -98,7 +100,7 @@ func (s *AIService) CalculateDynamicPrice(ctx context.Context, req domain.Dynami
 	}
 
 	// Distance factor (simplified Haversine)
-	dist := haversine(req.PickupLat, req.PickupLng, req.DropoffLat, req.DropoffLng)
+	dist := geo.Haversine(req.PickupLat, req.PickupLng, req.DropoffLat, req.DropoffLng)
 	distMultiplier := 1.0 + (dist / 50.0) // +100% per 50km
 
 	// Time-based demand multiplier (0.8x - 2.0x)

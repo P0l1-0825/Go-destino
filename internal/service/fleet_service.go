@@ -9,6 +9,7 @@ import (
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/repository"
+	"github.com/P0l1-0825/Go-destino/pkg/geo"
 )
 
 type FleetService struct {
@@ -115,7 +116,7 @@ func (s *FleetService) FindNearbyDrivers(ctx context.Context, tenantID string, r
 		if req.MinRating > 0 && d.Rating < req.MinRating {
 			continue
 		}
-		dist := haversine(req.Lat, req.Lng, d.CurrentLat, d.CurrentLng)
+		dist := geo.Haversine(req.Lat, req.Lng, d.CurrentLat, d.CurrentLng)
 		if dist <= req.RadiusKM {
 			nearby = append(nearby, d)
 		}
@@ -135,14 +136,3 @@ func (s *FleetService) ListVehicles(ctx context.Context, tenantID string) ([]dom
 	return s.vehicleRepo.ListByTenant(ctx, tenantID)
 }
 
-// haversine computes distance in km between two lat/lng points.
-func haversine(lat1, lng1, lat2, lng2 float64) float64 {
-	const R = 6371.0 // Earth radius in km
-	dLat := (lat2 - lat1) * math.Pi / 180.0
-	dLng := (lng2 - lng1) * math.Pi / 180.0
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*math.Pi/180.0)*math.Cos(lat2*math.Pi/180.0)*
-			math.Sin(dLng/2)*math.Sin(dLng/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	return R * c
-}

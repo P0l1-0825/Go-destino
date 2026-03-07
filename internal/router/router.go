@@ -37,9 +37,11 @@ func New(
 	// Auth (public)
 	mux.HandleFunc("POST /api/v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
+	mux.HandleFunc("POST /api/v1/auth/refresh", authH.RefreshToken)
 
 	// Auth (protected)
 	mux.Handle("GET /api/v1/auth/me", applyAuth(authSvc, http.HandlerFunc(authH.Me)))
+	mux.Handle("POST /api/v1/auth/change-password", applyAuth(authSvc, http.HandlerFunc(authH.ChangePassword)))
 
 	// Routes
 	mux.Handle("POST /api/v1/routes", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(routeH.Create)))
@@ -58,6 +60,7 @@ func New(
 	mux.Handle("GET /api/v1/bookings/number/{number}", applyAuth(authSvc, http.HandlerFunc(bookingH.GetByNumber)))
 	mux.Handle("POST /api/v1/bookings/{id}/cancel", applyAuthPerm(authSvc, domain.PermResCancelOwn, http.HandlerFunc(bookingH.Cancel)))
 	mux.Handle("PUT /api/v1/bookings/{id}/status", applyAuthPerm(authSvc, domain.PermResAssignDriver, http.HandlerFunc(bookingH.UpdateStatus)))
+	mux.Handle("POST /api/v1/bookings/{id}/assign", applyAuthPerm(authSvc, domain.PermResAssignDriver, http.HandlerFunc(bookingH.AssignDriver)))
 	mux.Handle("POST /api/v1/bookings/estimate", applyAuthPerm(authSvc, domain.PermResPriceEstimate, http.HandlerFunc(bookingH.Estimate)))
 
 	// Kiosks

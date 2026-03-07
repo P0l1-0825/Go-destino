@@ -46,6 +46,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.authSvc.Register(r.Context(), tenantID, req)
 	if err != nil {
+		if err.Error() == "email already registered" {
+			response.Error(w, http.StatusConflict, err.Error())
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -62,6 +66,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validator.ValidateEmail(req.Email); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validator.ValidateRequired(req.Password, "password"); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	resp, err := h.authSvc.Login(r.Context(), tenantID, req)
 	if err != nil {
 		response.Error(w, http.StatusUnauthorized, err.Error())
@@ -69,6 +82,56 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var req domain.RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := validator.ValidateRequired(req.RefreshToken, "refresh_token"); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.authSvc.RefreshToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		response.Error(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := validator.ValidateRequired(req.OldPassword, "old_password"); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validator.ValidateMinLength(req.NewPassword, "new_password", 8); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.authSvc.ChangePassword(r.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
