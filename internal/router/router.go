@@ -27,6 +27,7 @@ func New(
 	flightH *handler.FlightHandler,
 	safetyH *handler.SafetyHandler,
 	wsH *handler.WSHandler,
+	kioskUXH *handler.KioskUXHandler,
 	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -73,6 +74,19 @@ func New(
 	mux.Handle("PUT /api/v1/kiosks/{id}/heartbeat", applyAuth(authSvc, http.HandlerFunc(kioskH.Heartbeat)))
 	mux.Handle("PUT /api/v1/kiosks/{id}/status", applyAuthPerm(authSvc, domain.PermSysKioskManage, http.HandlerFunc(kioskH.UpdateStatus)))
 	mux.Handle("GET /api/v1/kiosks", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskH.List)))
+
+	// Kiosk UX (AI-powered fast booking experience)
+	mux.Handle("GET /api/v1/kiosk/suggestions", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.Suggestions)))
+	mux.Handle("GET /api/v1/kiosk/flights/{number}", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.FlightLookup)))
+	mux.Handle("POST /api/v1/kiosk/recommend", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.RecommendService)))
+	mux.Handle("POST /api/v1/kiosk/quick-book", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.QuickBook)))
+	mux.Handle("POST /api/v1/kiosk/estimate", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.Estimate)))
+	mux.Handle("GET /api/v1/kiosk/receipts/{bookingId}", applyAuthPerm(authSvc, domain.PermKioskPrintTicket, http.HandlerFunc(kioskUXH.GetReceipt)))
+	mux.Handle("POST /api/v1/kiosk/sessions", applyAuth(authSvc, http.HandlerFunc(kioskUXH.StartSession)))
+	mux.Handle("PUT /api/v1/kiosk/sessions/{id}/end", applyAuth(authSvc, http.HandlerFunc(kioskUXH.EndSession)))
+	mux.Handle("GET /api/v1/kiosk/cards/{number}/balance", applyAuth(authSvc, http.HandlerFunc(kioskUXH.CardBalance)))
+	mux.Handle("POST /api/v1/kiosk/cards/recharge", applyAuthPerm(authSvc, domain.PermPayCharge, http.HandlerFunc(kioskUXH.RechargeCard)))
+	mux.Handle("POST /api/v1/kiosk/cards/issue", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.IssueCard)))
 
 	// Fleet management
 	mux.Handle("POST /api/v1/fleet/drivers", applyAuthPerm(authSvc, domain.PermFleetDriverOnboard, http.HandlerFunc(fleetH.RegisterDriver)))
