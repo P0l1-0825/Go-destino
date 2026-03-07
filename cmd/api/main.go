@@ -44,6 +44,7 @@ func main() {
 	airportRepo := repository.NewAirportRepository(db)
 	cardRepo := repository.NewTransportCardRepository(db)
 	sessionRepo := repository.NewKioskSessionRepository(db)
+	monitorRepo := repository.NewKioskMonitorRepository(db)
 
 	// Services
 	auditSvc := service.NewAuditService(auditRepo)
@@ -71,6 +72,7 @@ func main() {
 	flightSvc := service.NewFlightService(bookingRepo, notifSvc)
 	safetySvc := service.NewSafetyService(db, notifSvc)
 	kioskUXSvc := service.NewKioskUXService(bookingSvc, kioskRepo, bookingRepo, paymentRepo, routeRepo, cardRepo, sessionRepo)
+	kioskMonSvc := service.NewKioskMonitorService(monitorRepo, kioskRepo, notifSvc)
 
 	// CORS configuration
 	corsCfg := middleware.CORSConfig{
@@ -94,12 +96,13 @@ func main() {
 	safetyH := handler.NewSafetyHandler(safetySvc)
 	wsH := handler.NewWSHandler(fleetSvc)
 	kioskUXH := handler.NewKioskUXHandler(kioskUXSvc)
+	kioskMonH := handler.NewKioskMonitorHandler(kioskMonSvc)
 
 	// Router
 	r := router.New(
 		authSvc, authH, routeH, ticketH, bookingH, kioskH,
 		fleetH, aiH, analyticsH, notifH, voucherH, shiftH, adminH,
-		flightH, safetyH, wsH, kioskUXH,
+		flightH, safetyH, wsH, kioskUXH, kioskMonH,
 		corsCfg,
 	)
 
@@ -115,7 +118,7 @@ func main() {
 
 	go func() {
 		log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
-		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
+		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, kiosk-monitor, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

@@ -28,6 +28,7 @@ func New(
 	safetyH *handler.SafetyHandler,
 	wsH *handler.WSHandler,
 	kioskUXH *handler.KioskUXHandler,
+	kioskMonH *handler.KioskMonitorHandler,
 	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -87,6 +88,21 @@ func New(
 	mux.Handle("GET /api/v1/kiosk/cards/{number}/balance", applyAuth(authSvc, http.HandlerFunc(kioskUXH.CardBalance)))
 	mux.Handle("POST /api/v1/kiosk/cards/recharge", applyAuthPerm(authSvc, domain.PermPayCharge, http.HandlerFunc(kioskUXH.RechargeCard)))
 	mux.Handle("POST /api/v1/kiosk/cards/issue", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(kioskUXH.IssueCard)))
+
+	// Kiosk Monitoring & Remote Support
+	mux.Handle("PUT /api/v1/monitor/kiosks/{id}/heartbeat", applyAuth(authSvc, http.HandlerFunc(kioskMonH.HeartbeatFull)))
+	mux.Handle("GET /api/v1/monitor/dashboard", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.FleetDashboard)))
+	mux.Handle("GET /api/v1/monitor/kiosks/{id}/diagnostics", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.Diagnostics)))
+	mux.Handle("GET /api/v1/monitor/kiosks/{id}/telemetry", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.TelemetryHistory)))
+	mux.Handle("GET /api/v1/monitor/kiosks/{id}/events", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.Events)))
+	mux.Handle("POST /api/v1/monitor/kiosks/{id}/commands", applyAuthPerm(authSvc, domain.PermSysKioskManage, http.HandlerFunc(kioskMonH.SendCommand)))
+	mux.Handle("GET /api/v1/monitor/kiosks/{id}/commands", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.CommandHistory)))
+	mux.Handle("GET /api/v1/monitor/alerts", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.Alerts)))
+	mux.Handle("PUT /api/v1/monitor/alerts/{id}/ack", applyAuthPerm(authSvc, domain.PermSysKioskManage, http.HandlerFunc(kioskMonH.AckAlert)))
+	mux.Handle("PUT /api/v1/monitor/alerts/{id}/resolve", applyAuthPerm(authSvc, domain.PermSysKioskManage, http.HandlerFunc(kioskMonH.ResolveAlert)))
+	mux.Handle("GET /api/v1/monitor/events", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.EventsByTenant)))
+	mux.Handle("PUT /api/v1/monitor/commands/{id}/result", applyAuth(authSvc, http.HandlerFunc(kioskMonH.CommandResult)))
+	mux.Handle("GET /api/v1/monitor/stream", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(kioskMonH.StreamMonitor)))
 
 	// Fleet management
 	mux.Handle("POST /api/v1/fleet/drivers", applyAuthPerm(authSvc, domain.PermFleetDriverOnboard, http.HandlerFunc(fleetH.RegisterDriver)))
