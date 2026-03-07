@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,15 +13,59 @@ import (
 	"github.com/P0l1-0825/Go-destino/internal/config"
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/repository"
+	"github.com/P0l1-0825/Go-destino/internal/security"
 )
 
 type AuthService struct {
-	userRepo *repository.UserRepository
-	jwtCfg   config.JWTConfig
+	userRepo       *repository.UserRepository
+	jwtCfg         config.JWTConfig
+	loginLimiter   *security.LoginLimiter
+	tokenBlacklist *security.TokenBlacklist
+	resetStore     *security.PasswordResetStore
+	passwordPolicy security.PasswordPolicy
+	auditFn        func(tenantID, userID, action, resource, resourceID, details, ip, ua string)
+}
+
+type AuthServiceConfig struct {
+	UserRepo       *repository.UserRepository
+	JWTCfg         config.JWTConfig
+	LoginLimiter   *security.LoginLimiter
+	TokenBlacklist *security.TokenBlacklist
+	ResetStore     *security.PasswordResetStore
+	AuditFn        func(tenantID, userID, action, resource, resourceID, details, ip, ua string)
 }
 
 func NewAuthService(userRepo *repository.UserRepository, jwtCfg config.JWTConfig) *AuthService {
-	return &AuthService{userRepo: userRepo, jwtCfg: jwtCfg}
+	return &AuthService{
+		userRepo:       userRepo,
+		jwtCfg:         jwtCfg,
+		loginLimiter:   security.NewLoginLimiter(5, 15*time.Minute, 30*time.Minute),
+		tokenBlacklist: security.NewTokenBlacklist(),
+		resetStore:     security.NewPasswordResetStore(),
+		passwordPolicy: security.DefaultPasswordPolicy(),
+	}
+}
+
+func NewAuthServiceFull(cfg AuthServiceConfig) *AuthService {
+	s := &AuthService{
+		userRepo:       cfg.UserRepo,
+		jwtCfg:         cfg.JWTCfg,
+		loginLimiter:   cfg.LoginLimiter,
+		tokenBlacklist: cfg.TokenBlacklist,
+		resetStore:     cfg.ResetStore,
+		passwordPolicy: security.DefaultPasswordPolicy(),
+		auditFn:        cfg.AuditFn,
+	}
+	if s.loginLimiter == nil {
+		s.loginLimiter = security.NewLoginLimiter(5, 15*time.Minute, 30*time.Minute)
+	}
+	if s.tokenBlacklist == nil {
+		s.tokenBlacklist = security.NewTokenBlacklist()
+	}
+	if s.resetStore == nil {
+		s.resetStore = security.NewPasswordResetStore()
+	}
+	return s
 }
 
 type Claims struct {
@@ -43,6 +88,11 @@ func (s *AuthService) Register(ctx context.Context, tenantID string, req domain.
 	// Validate role
 	if !validRole(req.Role) {
 		return nil, fmt.Errorf("invalid role: %s", req.Role)
+	}
+
+	// Validate password strength
+	if err := s.passwordPolicy.Validate(req.Password); err != nil {
+		return nil, err
 	}
 
 	// Default language
@@ -73,22 +123,46 @@ func (s *AuthService) Register(ctx context.Context, tenantID string, req domain.
 		return nil, fmt.Errorf("creating user: %w", err)
 	}
 
+	s.audit(tenantID, user.ID, "user.register", "user", user.ID, "new user registered", "", "")
+
 	return user, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, tenantID string, req domain.LoginRequest) (*domain.LoginResponse, error) {
+func (s *AuthService) Login(ctx context.Context, tenantID string, req domain.LoginRequest, ip, userAgent string) (*domain.LoginResponse, error) {
+	loginKey := tenantID + ":" + req.Email
+
+	// Check rate limit before doing any work
+	if err := s.loginLimiter.Check(loginKey); err != nil {
+		s.audit(tenantID, "", "login.locked", "auth", "", fmt.Sprintf("login blocked for %s: account locked", req.Email), ip, userAgent)
+		return nil, err
+	}
+
 	user, err := s.userRepo.GetByEmail(ctx, tenantID, req.Email)
 	if err != nil {
+		lockErr := s.loginLimiter.RecordFailure(loginKey)
+		s.audit(tenantID, "", "login.failed", "auth", "", fmt.Sprintf("login failed for %s: user not found", req.Email), ip, userAgent)
+		if lockErr != nil {
+			return nil, lockErr
+		}
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		lockErr := s.loginLimiter.RecordFailure(loginKey)
+		s.audit(tenantID, user.ID, "login.failed", "auth", user.ID, fmt.Sprintf("login failed for %s: wrong password", req.Email), ip, userAgent)
+		if lockErr != nil {
+			return nil, lockErr
+		}
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if !user.Active {
+		s.audit(tenantID, user.ID, "login.disabled", "auth", user.ID, fmt.Sprintf("login attempt on disabled account %s", req.Email), ip, userAgent)
 		return nil, fmt.Errorf("account is disabled")
 	}
+
+	// Login success — clear rate limiter
+	s.loginLimiter.RecordSuccess(loginKey)
 
 	accessToken, err := s.generateToken(user, time.Duration(s.jwtCfg.ExpireHour)*time.Hour)
 	if err != nil {
@@ -105,11 +179,28 @@ func (s *AuthService) Login(ctx context.Context, tenantID string, req domain.Log
 		_ = s.userRepo.UpdateLastLogin(context.Background(), user.ID)
 	}()
 
+	s.audit(tenantID, user.ID, "login.success", "auth", user.ID, fmt.Sprintf("user %s logged in", req.Email), ip, userAgent)
+
 	return &domain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User:         *user,
 	}, nil
+}
+
+func (s *AuthService) Logout(tokenStr string) error {
+	claims, err := s.ValidateToken(tokenStr)
+	if err != nil {
+		return fmt.Errorf("invalid token")
+	}
+
+	if claims.ExpiresAt != nil {
+		s.tokenBlacklist.Revoke(claims.ID, claims.ExpiresAt.Time)
+	}
+
+	s.audit(claims.TenantID, claims.Subject, "logout", "auth", claims.Subject, "user logged out", "", "")
+
+	return nil
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*domain.LoginResponse, error) {
@@ -125,6 +216,11 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 
 	if !user.Active {
 		return nil, fmt.Errorf("account is disabled")
+	}
+
+	// Revoke the old refresh token
+	if claims.ExpiresAt != nil {
+		s.tokenBlacklist.Revoke(claims.ID, claims.ExpiresAt.Time)
 	}
 
 	newAccessToken, err := s.generateToken(user, time.Duration(s.jwtCfg.ExpireHour)*time.Hour)
@@ -154,8 +250,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, n
 		return fmt.Errorf("current password is incorrect")
 	}
 
-	if len(newPassword) < 8 {
-		return fmt.Errorf("new password must be at least 8 characters")
+	if err := s.passwordPolicy.Validate(newPassword); err != nil {
+		return err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
@@ -163,7 +259,59 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, n
 		return fmt.Errorf("hashing password: %w", err)
 	}
 
-	return s.userRepo.ChangePassword(ctx, userID, string(hash))
+	if err := s.userRepo.ChangePassword(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+
+	s.audit(user.TenantID, userID, "password.changed", "user", userID, "password changed", "", "")
+
+	return nil
+}
+
+// RequestPasswordReset generates a reset token (in production, send via email).
+func (s *AuthService) RequestPasswordReset(ctx context.Context, tenantID, email string) (string, error) {
+	user, err := s.userRepo.GetByEmail(ctx, tenantID, email)
+	if err != nil {
+		// Don't reveal whether the email exists
+		return "", nil
+	}
+
+	token, err := s.resetStore.CreateToken(user.ID, tenantID, email, 1*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	s.audit(tenantID, user.ID, "password.reset_requested", "user", user.ID, "password reset requested", "", "")
+
+	// In production: send email with the token
+	log.Printf("[SECURITY] Password reset token for %s: %s (would be emailed in production)", email, token)
+
+	return token, nil
+}
+
+// ResetPassword validates a reset token and sets a new password.
+func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	userID, err := s.resetStore.ValidateToken(token)
+	if err != nil {
+		return err
+	}
+
+	if err := s.passwordPolicy.Validate(newPassword); err != nil {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+
+	if err := s.userRepo.ChangePassword(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+
+	s.audit("", userID, "password.reset_completed", "user", userID, "password reset completed via token", "", "")
+
+	return nil
 }
 
 func (s *AuthService) ValidateToken(tokenStr string) (*Claims, error) {
@@ -180,6 +328,11 @@ func (s *AuthService) ValidateToken(tokenStr string) (*Claims, error) {
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
+	}
+
+	// Check if token has been revoked
+	if claims.ID != "" && s.tokenBlacklist.IsRevoked(claims.ID) {
+		return nil, fmt.Errorf("token has been revoked")
 	}
 
 	return claims, nil
@@ -220,6 +373,12 @@ func (s *AuthService) generateRefreshToken(user *domain.User) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtCfg.Secret))
+}
+
+func (s *AuthService) audit(tenantID, userID, action, resource, resourceID, details, ip, ua string) {
+	if s.auditFn != nil {
+		s.auditFn(tenantID, userID, action, resource, resourceID, details, ip, ua)
+	}
 }
 
 func validRole(role domain.UserRole) bool {

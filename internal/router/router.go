@@ -27,6 +27,7 @@ func New(
 	flightH *handler.FlightHandler,
 	safetyH *handler.SafetyHandler,
 	wsH *handler.WSHandler,
+	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -38,10 +39,13 @@ func New(
 	mux.HandleFunc("POST /api/v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authH.RefreshToken)
+	mux.HandleFunc("POST /api/v1/auth/forgot-password", authH.RequestPasswordReset)
+	mux.HandleFunc("POST /api/v1/auth/reset-password", authH.ResetPassword)
 
 	// Auth (protected)
 	mux.Handle("GET /api/v1/auth/me", applyAuth(authSvc, http.HandlerFunc(authH.Me)))
 	mux.Handle("POST /api/v1/auth/change-password", applyAuth(authSvc, http.HandlerFunc(authH.ChangePassword)))
+	mux.Handle("POST /api/v1/auth/logout", applyAuth(authSvc, http.HandlerFunc(authH.Logout)))
 
 	// Routes
 	mux.Handle("POST /api/v1/routes", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(routeH.Create)))
@@ -141,11 +145,16 @@ func New(
 
 	// Apply global middleware (order matters: outermost runs first)
 	var h http.Handler = mux
+	h = middleware.SecurityHeaders(h)
 	h = middleware.RateLimit(200, time.Minute)(h)
 	h = middleware.Logging(h)
 	h = middleware.RequestID(h)
 	h = middleware.Recovery(h)
-	h = middleware.CORS(h)
+	if len(corsConfig) > 0 {
+		h = middleware.CORSWithConfig(corsConfig[0])(h)
+	} else {
+		h = middleware.CORS(h)
+	}
 
 	return h
 }

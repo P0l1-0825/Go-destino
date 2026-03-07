@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Redis       RedisConfig
+	JWT         JWTConfig
+	CORSOrigins []string
 }
 
 type ServerConfig struct {
@@ -70,6 +72,7 @@ func Load() *Config {
 			Secret:     getEnv("JWT_SECRET", "change-me-in-production"),
 			ExpireHour: getEnvInt("JWT_EXPIRE_HOURS", 24),
 		},
+		CORSOrigins: getEnvList("CORS_ORIGINS"),
 	}
 }
 
@@ -78,6 +81,21 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvList(key string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	var result []string
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func getEnvInt(key string, fallback int) int {

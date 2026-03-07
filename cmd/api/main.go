@@ -11,6 +11,7 @@ import (
 
 	"github.com/P0l1-0825/Go-destino/internal/config"
 	"github.com/P0l1-0825/Go-destino/internal/handler"
+	"github.com/P0l1-0825/Go-destino/internal/middleware"
 	"github.com/P0l1-0825/Go-destino/internal/repository"
 	"github.com/P0l1-0825/Go-destino/internal/router"
 	"github.com/P0l1-0825/Go-destino/internal/service"
@@ -43,7 +44,18 @@ func main() {
 	airportRepo := repository.NewAirportRepository(db)
 
 	// Services
-	authSvc := service.NewAuthService(userRepo, cfg.JWT)
+	auditSvc := service.NewAuditService(auditRepo)
+
+	authSvc := service.NewAuthServiceFull(service.AuthServiceConfig{
+		UserRepo:       userRepo,
+		JWTCfg:         cfg.JWT,
+		TokenBlacklist: nil,
+		LoginLimiter:   nil,
+		ResetStore:     nil,
+		AuditFn: func(tenantID, userID, action, resource, resourceID, details, ip, ua string) {
+			auditSvc.Log(context.Background(), tenantID, userID, action, resource, resourceID, details, ip, ua)
+		},
+	})
 	routeSvc := service.NewRouteService(routeRepo)
 	ticketSvc := service.NewTicketService(ticketRepo, routeRepo, paymentRepo)
 	bookingSvc := service.NewBookingService(bookingRepo, paymentRepo)
@@ -54,9 +66,13 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo, paymentRepo)
 	shiftSvc := service.NewShiftService(shiftRepo)
-	auditSvc := service.NewAuditService(auditRepo)
 	flightSvc := service.NewFlightService(bookingRepo, notifSvc)
 	safetySvc := service.NewSafetyService(db, notifSvc)
+
+	// CORS configuration
+	corsCfg := middleware.CORSConfig{
+		AllowedOrigins: cfg.CORSOrigins,
+	}
 
 	// Handlers
 	authH := handler.NewAuthHandler(authSvc)
@@ -80,6 +96,7 @@ func main() {
 		authSvc, authH, routeH, ticketH, bookingH, kioskH,
 		fleetH, aiH, analyticsH, notifH, voucherH, shiftH, adminH,
 		flightH, safetyH, wsH,
+		corsCfg,
 	)
 
 	// Graceful shutdown
@@ -91,9 +108,6 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-
-	// Suppress unused variable warning
-	_ = auditSvc
 
 	go func() {
 		log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
@@ -50,7 +51,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusConflict, err.Error())
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -75,13 +76,36 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.authSvc.Login(r.Context(), tenantID, req)
+	ip := clientIP(r)
+	ua := r.UserAgent()
+
+	resp, err := h.authSvc.Login(r.Context(), tenantID, req, ip, ua)
 	if err != nil {
+		if strings.Contains(err.Error(), "locked") || strings.Contains(err.Error(), "too many") {
+			response.Error(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		response.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	response.JSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 {
+		response.Error(w, http.StatusBadRequest, "missing authorization header")
+		return
+	}
+
+	if err := h.authSvc.Logout(parts[1]); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
 
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +158,65 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
+func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := validator.ValidateEmail(req.Email); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Always return success to not reveal email existence
+	token, _ := h.authSvc.RequestPasswordReset(r.Context(), tenantID, req.Email)
+
+	resp := map[string]string{
+		"status":  "if the email exists, a reset link has been sent",
+		"message": "check your email for the password reset link",
+	}
+
+	// In development, include the token for testing
+	if token != "" {
+		resp["reset_token"] = token
+	}
+
+	response.JSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := validator.ValidateRequired(req.Token, "token"); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validator.ValidateMinLength(req.NewPassword, "new_password", 8); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.authSvc.ResetPassword(r.Context(), req.Token, req.NewPassword); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "password has been reset"})
+}
+
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ContextClaims).(*service.Claims)
 	if !ok {
@@ -147,4 +230,20 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		"tenant_id":   claims.TenantID,
 		"permissions": claims.Permissions,
 	})
+}
+
+// clientIP extracts the real client IP, checking X-Forwarded-For and X-Real-IP.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.SplitN(xff, ",", 2)
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	addr := r.RemoteAddr
+	if i := strings.LastIndex(addr, ":"); i != -1 {
+		return addr[:i]
+	}
+	return addr
 }
