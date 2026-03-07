@@ -50,6 +50,37 @@ func (r *KioskRepository) UpdateStatus(ctx context.Context, id string, status do
 	return err
 }
 
+// ListStaleOnline returns kiosks marked as 'online' whose last heartbeat is older than the given threshold.
+func (r *KioskRepository) ListStaleOnline(ctx context.Context, staleThreshold string) ([]domain.Kiosk, error) {
+	query := `SELECT id, tenant_id, name, location, airport_id, terminal_id, status, last_heartbeat, created_at, updated_at
+		FROM kiosks WHERE status = 'online' AND last_heartbeat < NOW() - $1::interval ORDER BY last_heartbeat`
+	rows, err := r.db.QueryContext(ctx, query, staleThreshold)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var kiosks []domain.Kiosk
+	for rows.Next() {
+		var k domain.Kiosk
+		if err := rows.Scan(
+			&k.ID, &k.TenantID, &k.Name, &k.Location, &k.AirportID, &k.TerminalID,
+			&k.Status, &k.LastHeartbeat, &k.CreatedAt, &k.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		kiosks = append(kiosks, k)
+	}
+	return kiosks, rows.Err()
+}
+
+// MarkOffline sets a kiosk status to offline.
+func (r *KioskRepository) MarkOffline(ctx context.Context, id string) error {
+	query := `UPDATE kiosks SET status = 'offline', updated_at = NOW() WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id)
+	return err
+}
+
 func (r *KioskRepository) ListByTenant(ctx context.Context, tenantID string) ([]domain.Kiosk, error) {
 	query := `SELECT id, tenant_id, name, location, airport_id, terminal_id, status, last_heartbeat, created_at, updated_at
 		FROM kiosks WHERE tenant_id = $1 ORDER BY name`

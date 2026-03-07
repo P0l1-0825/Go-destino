@@ -471,17 +471,46 @@ func (s *KioskMonitorService) offlineDetectorLoop() {
 
 func (s *KioskMonitorService) detectOfflineKiosks() {
 	ctx := context.Background()
-	// We can't easily iterate all tenants without a tenant repo, so we rely on
-	// the kiosk heartbeat timestamp. Any kiosk that hasn't heartbeated in 5 min
-	// is considered offline.
-	// This is done at the DB level by checking last_heartbeat.
 
-	// For now, log a check. In production, run:
-	// UPDATE kiosks SET status = 'offline' WHERE status = 'online'
-	//   AND last_heartbeat < NOW() - INTERVAL '5 minutes'
-	// Then create alerts for each.
-	log.Printf("[MONITOR] Running offline detection check at %s", time.Now().Format(time.RFC3339))
-	_ = ctx
+	staleKiosks, err := s.kioskRepo.ListStaleOnline(ctx, "5 minutes")
+	if err != nil {
+		log.Printf("[MONITOR] offline detection error: %v", err)
+		return
+	}
+
+	for _, k := range staleKiosks {
+		// Mark kiosk as offline
+		if err := s.kioskRepo.MarkOffline(ctx, k.ID); err != nil {
+			log.Printf("[MONITOR] failed to mark kiosk %s offline: %v", k.ID, err)
+			continue
+		}
+
+		// Log event
+		s.logEvent(ctx, k.ID, k.TenantID, "offline", "critical",
+			fmt.Sprintf("Kiosk went offline — last heartbeat: %s", k.LastHeartbeat.Format(time.RFC3339)), "")
+
+		// Raise alert
+		s.raiseAlertIfNew(ctx, k.ID, k.TenantID, "offline", "critical",
+			fmt.Sprintf("Kiosk is offline since %s", k.LastHeartbeat.Format("15:04:05")))
+
+		// Broadcast to SSE
+		s.broadcast(k.TenantID, domain.KioskMonitorEvent{
+			EventType: "alert",
+			KioskID:   k.ID,
+			Timestamp: time.Now(),
+			Data: map[string]string{
+				"alert_type":     "offline",
+				"severity":       "critical",
+				"last_heartbeat": k.LastHeartbeat.Format(time.RFC3339),
+			},
+		})
+
+		log.Printf("[MONITOR] Kiosk %s (%s) marked offline", k.ID, k.Name)
+	}
+
+	if len(staleKiosks) > 0 {
+		log.Printf("[MONITOR] Detected %d offline kiosk(s)", len(staleKiosks))
+	}
 }
 
 func (s *KioskMonitorService) telemetryCleanupLoop() {
