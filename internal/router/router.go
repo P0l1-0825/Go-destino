@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/handler"
@@ -23,6 +24,9 @@ func New(
 	voucherH *handler.VoucherHandler,
 	shiftH *handler.ShiftHandler,
 	adminH *handler.AdminHandler,
+	flightH *handler.FlightHandler,
+	safetyH *handler.SafetyHandler,
+	wsH *handler.WSHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -104,6 +108,22 @@ func New(
 	mux.Handle("GET /api/v1/shifts/active", applyAuth(authSvc, http.HandlerFunc(shiftH.GetActive)))
 	mux.Handle("GET /api/v1/shifts", applyAuth(authSvc, http.HandlerFunc(shiftH.List)))
 
+	// Flights & IROPS
+	mux.Handle("GET /api/v1/flights/{number}", applyAuth(authSvc, http.HandlerFunc(flightH.GetFlightStatus)))
+	mux.Handle("GET /api/v1/flights/arrivals/{code}", applyAuth(authSvc, http.HandlerFunc(flightH.ListArrivals)))
+	mux.Handle("POST /api/v1/flights/irops", applyAuthPerm(authSvc, domain.PermResOverrideAI, http.HandlerFunc(flightH.ReportIROPS)))
+
+	// Safety & SOS
+	mux.Handle("POST /api/v1/safety/incidents", applyAuth(authSvc, http.HandlerFunc(safetyH.ReportIncident)))
+	mux.Handle("POST /api/v1/safety/sos", applyAuth(authSvc, http.HandlerFunc(safetyH.TriggerSOS)))
+	mux.Handle("PUT /api/v1/safety/sos/{id}/resolve", applyAuthPerm(authSvc, domain.PermResOverrideAI, http.HandlerFunc(safetyH.ResolveSOS)))
+	mux.HandleFunc("GET /api/v1/safety/emergency-numbers", safetyH.GetEmergencyNumbers)
+
+	// Real-time tracking (SSE)
+	mux.Handle("GET /api/v1/track/driver/{id}", applyAuth(authSvc, http.HandlerFunc(wsH.TrackDriver)))
+	mux.Handle("POST /api/v1/track/publish", applyAuthPerm(authSvc, domain.PermFleetLocationOwn, http.HandlerFunc(wsH.PublishLocation)))
+	mux.Handle("GET /api/v1/track/drivers", applyAuthPerm(authSvc, domain.PermFleetLocationView, http.HandlerFunc(wsH.DriverLocations)))
+
 	// Admin
 	mux.Handle("POST /api/v1/admin/tenants", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(adminH.CreateTenant)))
 	mux.Handle("GET /api/v1/admin/tenants", applyAuthPerm(authSvc, domain.PermSysSettingsView, http.HandlerFunc(adminH.ListTenants)))
@@ -116,9 +136,12 @@ func New(
 	mux.Handle("GET /api/v1/admin/roles", applyAuthPerm(authSvc, domain.PermSysRolesAssign, http.HandlerFunc(adminH.ListRoles)))
 	mux.Handle("GET /api/v1/admin/permissions", applyAuthPerm(authSvc, domain.PermSysRolesAssign, http.HandlerFunc(adminH.ListPermissions)))
 
-	// Apply global middleware
+	// Apply global middleware (order matters: outermost runs first)
 	var h http.Handler = mux
+	h = middleware.RateLimit(200, time.Minute)(h)
 	h = middleware.Logging(h)
+	h = middleware.RequestID(h)
+	h = middleware.Recovery(h)
 	h = middleware.CORS(h)
 
 	return h

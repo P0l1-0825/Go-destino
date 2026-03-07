@@ -50,6 +50,8 @@ func main() {
 	voucherSvc := service.NewVoucherService(voucherRepo, paymentRepo)
 	shiftSvc := service.NewShiftService(shiftRepo)
 	auditSvc := service.NewAuditService(auditRepo)
+	flightSvc := service.NewFlightService(bookingRepo, notifSvc)
+	safetySvc := service.NewSafetyService(db, notifSvc)
 
 	// Handlers
 	authH := handler.NewAuthHandler(authSvc)
@@ -64,17 +66,20 @@ func main() {
 	voucherH := handler.NewVoucherHandler(voucherSvc)
 	shiftH := handler.NewShiftHandler(shiftSvc)
 	adminH := handler.NewAdminHandler(tenantRepo, userRepo, airportRepo, auditSvc)
+	flightH := handler.NewFlightHandler(flightSvc)
+	safetyH := handler.NewSafetyHandler(safetySvc)
+	wsH := handler.NewWSHandler(fleetSvc)
 
 	// Router
 	r := router.New(
 		authSvc, authH, routeH, ticketH, bookingH, kioskH,
 		fleetH, aiH, analyticsH, notifH, voucherH, shiftH, adminH,
+		flightH, safetyH, wsH,
 	)
 
 	addr := ":" + cfg.Server.Port
 	log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
-	log.Printf("Endpoints: /health | /ready | /api/v1/*")
-	log.Printf("Modules: auth, routes, tickets, bookings, kiosks, fleet, ai, analytics, notifications, vouchers, shifts, admin")
+	log.Printf("Modules: auth, routes, tickets, bookings, kiosks, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("Server failed: %v", err)
