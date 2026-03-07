@@ -12,7 +12,28 @@ type Config struct {
 	Database    DatabaseConfig
 	Redis       RedisConfig
 	JWT         JWTConfig
+	SMTP        SMTPConfig
+	Twilio      TwilioConfig
 	CORSOrigins []string
+}
+
+// SMTPConfig holds email delivery settings.
+type SMTPConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	From     string // "GoDestino <noreply@godestino.com>"
+	Enabled  bool
+}
+
+// TwilioConfig holds SMS and WhatsApp delivery settings.
+type TwilioConfig struct {
+	AccountSID     string
+	AuthToken      string
+	SMSFrom        string // e.g. "+15551234567"
+	WhatsAppFrom   string // e.g. "whatsapp:+14155238886"
+	Enabled        bool
 }
 
 type ServerConfig struct {
@@ -71,6 +92,21 @@ func Load() *Config {
 		JWT: JWTConfig{
 			Secret:     getEnv("JWT_SECRET", "change-me-in-production"),
 			ExpireHour: getEnvInt("JWT_EXPIRE_HOURS", 24),
+		},
+		SMTP: SMTPConfig{
+			Host:     getEnv("SMTP_HOST", ""),
+			Port:     getEnvInt("SMTP_PORT", 587),
+			User:     getEnv("SMTP_USER", ""),
+			Password: getEnv("SMTP_PASSWORD", ""),
+			From:     getEnv("SMTP_FROM", "GoDestino <noreply@godestino.com>"),
+			Enabled:  getEnv("SMTP_ENABLED", "false") == "true",
+		},
+		Twilio: TwilioConfig{
+			AccountSID:   getEnv("TWILIO_ACCOUNT_SID", ""),
+			AuthToken:    getEnv("TWILIO_AUTH_TOKEN", ""),
+			SMSFrom:      getEnv("TWILIO_SMS_FROM", ""),
+			WhatsAppFrom: getEnv("TWILIO_WHATSAPP_FROM", ""),
+			Enabled:      getEnv("TWILIO_ENABLED", "false") == "true",
 		},
 		CORSOrigins: getEnvList("CORS_ORIGINS"),
 	}

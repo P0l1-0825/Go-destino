@@ -66,13 +66,31 @@ func main() {
 	fleetSvc := service.NewFleetService(driverRepo, vehicleRepo)
 	aiSvc := service.NewAIService(bookingRepo)
 	analyticsSvc := service.NewAnalyticsService(db)
-	notifSvc := service.NewNotificationService(notifRepo)
+
+	// Messaging infrastructure
+	smtpSvc := service.NewSMTPService(cfg.SMTP)
+	twilioSvc := service.NewTwilioService(cfg.Twilio)
+	emailTemplateSvc := service.NewEmailTemplateService()
+
+	// Notification service with full delivery (SMTP + Twilio + templates)
+	notifSvc := service.NewNotificationServiceFull(notifRepo, userRepo, smtpSvc, twilioSvc, emailTemplateSvc)
+
+	// Payment service with notifications + audit
+	paymentSvc := service.NewPaymentService(paymentRepo, notifSvc, auditSvc)
+
+	// Wire notification + payment into booking/ticket services
+	bookingSvc.SetNotificationService(notifSvc)
+	bookingSvc.SetPaymentService(paymentSvc)
+	ticketSvc.SetNotificationService(notifSvc)
+
 	voucherSvc := service.NewVoucherService(voucherRepo, paymentRepo)
 	shiftSvc := service.NewShiftService(shiftRepo)
 	flightSvc := service.NewFlightService(bookingRepo, notifSvc)
 	safetySvc := service.NewSafetyService(db, notifSvc)
 	kioskUXSvc := service.NewKioskUXService(bookingSvc, kioskRepo, bookingRepo, paymentRepo, routeRepo, cardRepo, sessionRepo)
 	kioskMonSvc := service.NewKioskMonitorService(monitorRepo, kioskRepo, notifSvc)
+
+	log.Printf("Messaging: SMTP=%v Twilio=%v", smtpSvc.IsEnabled(), twilioSvc.IsEnabled())
 
 	// CORS configuration
 	corsCfg := middleware.CORSConfig{

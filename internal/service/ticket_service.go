@@ -19,6 +19,7 @@ type TicketService struct {
 	ticketRepo  *repository.TicketRepository
 	routeRepo   *repository.RouteRepository
 	paymentRepo *repository.PaymentRepository
+	notifSvc    *NotificationService
 }
 
 func NewTicketService(
@@ -31,6 +32,11 @@ func NewTicketService(
 		routeRepo:   routeRepo,
 		paymentRepo: paymentRepo,
 	}
+}
+
+// SetNotificationService injects the notification service.
+func (s *TicketService) SetNotificationService(notifSvc *NotificationService) {
+	s.notifSvc = notifSvc
 }
 
 func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID string, req domain.PurchaseTicketRequest) (*domain.PurchaseTicketResponse, error) {
@@ -113,6 +119,14 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 		return nil, fmt.Errorf("completing payment: %w", err)
 	}
 	payment.Status = domain.PaymentCompleted
+
+	// Send ticket purchase confirmation (email + SMS + WhatsApp)
+	if s.notifSvc != nil {
+		go s.notifSvc.SendTicketPurchaseNotification(
+			context.Background(), tenantID, "", // no userID for anonymous kiosk purchases
+			tickets, totalAmount, route.Currency, req.PaymentMethod, "es",
+		)
+	}
 
 	return &domain.PurchaseTicketResponse{
 		Tickets: tickets,

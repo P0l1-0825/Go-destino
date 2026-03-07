@@ -16,10 +16,22 @@ import (
 type BookingService struct {
 	bookingRepo *repository.BookingRepository
 	paymentRepo *repository.PaymentRepository
+	notifSvc    *NotificationService
+	paymentSvc  *PaymentService
 }
 
 func NewBookingService(bookingRepo *repository.BookingRepository, paymentRepo *repository.PaymentRepository) *BookingService {
 	return &BookingService{bookingRepo: bookingRepo, paymentRepo: paymentRepo}
+}
+
+// SetNotificationService injects the notification service (avoids circular init deps).
+func (s *BookingService) SetNotificationService(notifSvc *NotificationService) {
+	s.notifSvc = notifSvc
+}
+
+// SetPaymentService injects the payment service.
+func (s *BookingService) SetPaymentService(paymentSvc *PaymentService) {
+	s.paymentSvc = paymentSvc
 }
 
 func (s *BookingService) Create(ctx context.Context, tenantID, userID, kioskID string, req domain.CreateBookingRequest) (*domain.Booking, error) {
@@ -76,8 +88,31 @@ func (s *BookingService) Create(ctx context.Context, tenantID, userID, kioskID s
 		ScheduledAt:    req.ScheduledAt,
 	}
 
+	// Process payment if payment method is provided
+	if req.PaymentMethod != "" && s.paymentSvc != nil {
+		payment, err := s.paymentSvc.ProcessPayment(ctx, ProcessPaymentRequest{
+			TenantID:    tenantID,
+			UserID:      userID,
+			BookingID:   booking.ID,
+			KioskID:     kioskID,
+			Method:      domain.PaymentMethod(req.PaymentMethod),
+			AmountCents: estimate.PriceCents,
+			Currency:    estimate.Currency,
+			Lang:        "es",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("payment failed: %w", err)
+		}
+		booking.PaymentID = payment.ID
+	}
+
 	if err := s.bookingRepo.Create(ctx, booking); err != nil {
 		return nil, fmt.Errorf("creating booking: %w", err)
+	}
+
+	// Send booking confirmation (all channels)
+	if s.notifSvc != nil {
+		go s.notifSvc.SendBookingConfirmationFull(context.Background(), tenantID, booking, "es")
 	}
 
 	return booking, nil
@@ -92,7 +127,21 @@ func (s *BookingService) GetByNumber(ctx context.Context, number string) (*domai
 }
 
 func (s *BookingService) Confirm(ctx context.Context, id string) error {
-	return s.transitionStatus(ctx, id, domain.BookingConfirmed)
+	if err := s.transitionStatus(ctx, id, domain.BookingConfirmed); err != nil {
+		return err
+	}
+
+	// Send confirmation notifications
+	if s.notifSvc != nil {
+		go func() {
+			booking, err := s.bookingRepo.GetByID(context.Background(), id)
+			if err == nil {
+				s.notifSvc.SendBookingConfirmationFull(context.Background(), booking.TenantID, booking, "es")
+			}
+		}()
+	}
+
+	return nil
 }
 
 func (s *BookingService) AssignDriver(ctx context.Context, id string, req domain.AssignDriverRequest) error {
@@ -103,7 +152,19 @@ func (s *BookingService) AssignDriver(ctx context.Context, id string, req domain
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingAssigned); err != nil {
 		return err
 	}
-	return s.bookingRepo.AssignDriver(ctx, id, req.DriverID, req.VehicleID)
+	if err := s.bookingRepo.AssignDriver(ctx, id, req.DriverID, req.VehicleID); err != nil {
+		return err
+	}
+
+	// Notify user of driver assignment
+	if s.notifSvc != nil {
+		go s.notifSvc.SendDriverAssignedFull(
+			context.Background(), booking.TenantID, booking,
+			req.DriverID, req.VehicleID, "es",
+		)
+	}
+
+	return nil
 }
 
 func (s *BookingService) StartTrip(ctx context.Context, id string) error {
@@ -125,7 +186,25 @@ func (s *BookingService) CompleteBooking(ctx context.Context, id string) error {
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingCompleted); err != nil {
 		return err
 	}
-	return s.bookingRepo.SetCompleted(ctx, id)
+	if err := s.bookingRepo.SetCompleted(ctx, id); err != nil {
+		return err
+	}
+
+	// Send trip completed notification with receipt
+	if s.notifSvc != nil {
+		go func() {
+			paymentMethod := "card"
+			if booking.PaymentID != "" && s.paymentRepo != nil {
+				p, err := s.paymentRepo.GetByID(context.Background(), booking.PaymentID)
+				if err == nil {
+					paymentMethod = string(p.Method)
+				}
+			}
+			s.notifSvc.SendTripCompletedFull(context.Background(), booking.TenantID, booking, paymentMethod, "es")
+		}()
+	}
+
+	return nil
 }
 
 func (s *BookingService) Cancel(ctx context.Context, id, reason string) error {
@@ -136,7 +215,26 @@ func (s *BookingService) Cancel(ctx context.Context, id, reason string) error {
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingCancelled); err != nil {
 		return err
 	}
-	return s.bookingRepo.SetCancelled(ctx, id, reason)
+	if err := s.bookingRepo.SetCancelled(ctx, id, reason); err != nil {
+		return err
+	}
+
+	// Send cancellation notification
+	if s.notifSvc != nil {
+		go s.notifSvc.SendCancellationNotification(context.Background(), booking.TenantID, booking, reason, "es")
+	}
+
+	// Auto-refund if payment exists
+	if booking.PaymentID != "" && s.paymentSvc != nil {
+		go func() {
+			_, err := s.paymentSvc.RefundPayment(context.Background(), booking.PaymentID, booking.TenantID, booking.UserID, reason, "es")
+			if err != nil {
+				fmt.Printf("[BOOKING] auto-refund failed for %s: %v\n", booking.PaymentID, err)
+			}
+		}()
+	}
+
+	return nil
 }
 
 func (s *BookingService) UpdateStatus(ctx context.Context, id string, status domain.BookingStatus) error {
@@ -234,4 +332,3 @@ func generateBookingNumber() (string, error) {
 	}
 	return "GD-" + string(result), nil
 }
-
