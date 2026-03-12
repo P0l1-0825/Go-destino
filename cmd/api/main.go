@@ -31,8 +31,9 @@ func main() {
 	defer db.Close()
 
 	// Run migrations (idempotent — safe to run on every startup)
+	// Handles "already exists" errors gracefully (e.g., from docker-entrypoint-initdb.d)
 	if err := migrate.Run(db, os.DirFS("migrations")); err != nil {
-		log.Printf("WARNING: Migration failed: %v (continuing — tables may already exist via docker-entrypoint)", err)
+		log.Fatalf("Migration failed: %v", err)
 	}
 
 	// Redis (graceful fallback — in-memory security components if unavailable)
