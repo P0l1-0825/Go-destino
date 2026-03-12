@@ -40,6 +40,22 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 	return u, nil
 }
 
+// GetByIDTenant is the tenant-scoped variant that prevents cross-tenant user access.
+func (r *UserRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.User, error) {
+	u := &domain.User{}
+	query := `SELECT id, tenant_id, email, phone, password_hash, name, role, sub_role, company_id, lang, active, mfa_enabled, created_at, updated_at, last_login
+		FROM users WHERE id = $1 AND tenant_id = $2`
+	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(
+		&u.ID, &u.TenantID, &u.Email, &u.Phone, &u.PasswordHash, &u.Name, &u.Role,
+		&u.SubRole, &u.CompanyID, &u.Lang, &u.Active, &u.MFAEnabled,
+		&u.CreatedAt, &u.UpdatedAt, &u.LastLogin,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
 func (r *UserRepository) GetByEmail(ctx context.Context, tenantID, email string) (*domain.User, error) {
 	u := &domain.User{}
 	query := `SELECT id, tenant_id, email, phone, password_hash, name, role, sub_role, company_id, lang, active, mfa_enabled, created_at, updated_at, last_login
@@ -57,8 +73,8 @@ func (r *UserRepository) GetByEmail(ctx context.Context, tenantID, email string)
 
 func (r *UserRepository) Update(ctx context.Context, u *domain.User) error {
 	query := `UPDATE users SET name = $1, phone = $2, sub_role = $3, company_id = $4, lang = $5, updated_at = NOW()
-		WHERE id = $6`
-	res, err := r.db.ExecContext(ctx, query, u.Name, u.Phone, u.SubRole, u.CompanyID, u.Lang, u.ID)
+		WHERE id = $6 AND tenant_id = $7`
+	res, err := r.db.ExecContext(ctx, query, u.Name, u.Phone, u.SubRole, u.CompanyID, u.Lang, u.ID, u.TenantID)
 	if err != nil {
 		return err
 	}
@@ -83,6 +99,16 @@ func (r *UserRepository) UpdateRole(ctx context.Context, id string, role domain.
 	return checkRowsAffected(res, "user")
 }
 
+// UpdateRoleTenant is the tenant-scoped variant that prevents cross-tenant role changes.
+func (r *UserRepository) UpdateRoleTenant(ctx context.Context, id, tenantID string, role domain.UserRole) error {
+	query := `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	res, err := r.db.ExecContext(ctx, query, role, id, tenantID)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "user")
+}
+
 func (r *UserRepository) Deactivate(ctx context.Context, id string) error {
 	query := `UPDATE users SET active = false, updated_at = NOW() WHERE id = $1`
 	res, err := r.db.ExecContext(ctx, query, id)
@@ -92,9 +118,29 @@ func (r *UserRepository) Deactivate(ctx context.Context, id string) error {
 	return checkRowsAffected(res, "user")
 }
 
+// DeactivateTenant is the tenant-scoped variant that prevents cross-tenant deactivation.
+func (r *UserRepository) DeactivateTenant(ctx context.Context, id, tenantID string) error {
+	query := `UPDATE users SET active = false, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`
+	res, err := r.db.ExecContext(ctx, query, id, tenantID)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "user")
+}
+
 func (r *UserRepository) Activate(ctx context.Context, id string) error {
 	query := `UPDATE users SET active = true, updated_at = NOW() WHERE id = $1`
 	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "user")
+}
+
+// ActivateTenant is the tenant-scoped variant that prevents cross-tenant activation.
+func (r *UserRepository) ActivateTenant(ctx context.Context, id, tenantID string) error {
+	query := `UPDATE users SET active = true, updated_at = NOW() WHERE id = $1 AND tenant_id = $2`
+	res, err := r.db.ExecContext(ctx, query, id, tenantID)
 	if err != nil {
 		return err
 	}

@@ -100,10 +100,11 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, users)
 }
 
-// Get single user
+// Get single user (tenant-scoped to prevent cross-tenant access)
 func (h *AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
-	user, err := h.userRepo.GetByID(r.Context(), id)
+	user, err := h.userRepo.GetByIDTenant(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -171,7 +172,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
-	user, err := h.userRepo.GetByID(r.Context(), id)
+	user, err := h.userRepo.GetByIDTenant(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -219,7 +220,7 @@ func (h *AdminHandler) ActivateUser(w http.ResponseWriter, r *http.Request) {
 	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
-	if err := h.userRepo.Activate(r.Context(), id); err != nil {
+	if err := h.userRepo.ActivateTenant(r.Context(), id, tenantID); err != nil {
 		response.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
@@ -233,7 +234,7 @@ func (h *AdminHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
-	if err := h.userRepo.Deactivate(r.Context(), id); err != nil {
+	if err := h.userRepo.DeactivateTenant(r.Context(), id, tenantID); err != nil {
 		response.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
@@ -259,7 +260,7 @@ func (h *AdminHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.userRepo.UpdateRole(r.Context(), id, req.Role); err != nil {
+	if err := h.userRepo.UpdateRoleTenant(r.Context(), id, tenantID, req.Role); err != nil {
 		response.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
@@ -301,8 +302,9 @@ func (h *AdminHandler) ListAirports(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) GetAirport(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
-	airport, err := h.airportRepo.GetByID(r.Context(), id)
+	airport, err := h.airportRepo.GetByIDTenant(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "airport not found")
 		return

@@ -320,7 +320,7 @@ func (s *KioskUXService) QuickBook(ctx context.Context, kioskID, tenantID, selle
 	}
 
 	// Update booking with payment
-	_ = s.bookingRepo.SetPayment(ctx, booking.ID, payment.ID)
+	_ = s.bookingRepo.SetPayment(ctx, booking.ID, tenantID, payment.ID)
 	booking.PaymentID = payment.ID
 
 	// Generate receipt
@@ -360,7 +360,7 @@ func (s *KioskUXService) GetReceipt(ctx context.Context, bookingID, kioskID, lan
 
 	var payment *domain.Payment
 	if booking.PaymentID != "" {
-		payment, _ = s.paymentRepo.GetByID(ctx, booking.PaymentID)
+		payment, _ = s.paymentRepo.GetByIDTenant(ctx, booking.PaymentID, booking.TenantID)
 	}
 	if payment == nil {
 		payment = &domain.Payment{Currency: "MXN"}

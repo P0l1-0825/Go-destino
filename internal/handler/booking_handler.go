@@ -92,13 +92,14 @@ func (h *BookingHandler) GetByNumber(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
 	var req domain.CancelBookingRequest
 	// Body is optional for cancel
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	if err := h.bookingSvc.Cancel(r.Context(), id, req.Reason); err != nil {
+	if err := h.bookingSvc.Cancel(r.Context(), id, tenantID, req.Reason); err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -106,6 +107,7 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) AssignDriver(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
 	var req domain.AssignDriverRequest
@@ -119,7 +121,7 @@ func (h *BookingHandler) AssignDriver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.bookingSvc.AssignDriver(r.Context(), id, req); err != nil {
+	if err := h.bookingSvc.AssignDriver(r.Context(), id, tenantID, req); err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -127,6 +129,7 @@ func (h *BookingHandler) AssignDriver(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 
 	var req struct {
@@ -142,7 +145,7 @@ func (h *BookingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.bookingSvc.UpdateStatus(r.Context(), id, req.Status); err != nil {
+	if err := h.bookingSvc.UpdateStatus(r.Context(), id, tenantID, req.Status); err != nil {
 		if strings.Contains(err.Error(), "invalid transition") || strings.Contains(err.Error(), "cannot transition") {
 			response.Error(w, http.StatusConflict, err.Error())
 			return
@@ -196,13 +199,14 @@ func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) StartTrip(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 	if id == "" {
 		response.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
 
-	if err := h.bookingSvc.StartTrip(r.Context(), id); err != nil {
+	if err := h.bookingSvc.StartTrip(r.Context(), id, tenantID); err != nil {
 		if strings.Contains(err.Error(), "invalid transition") || strings.Contains(err.Error(), "cannot transition") {
 			response.Error(w, http.StatusConflict, err.Error())
 			return

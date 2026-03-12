@@ -46,13 +46,14 @@ func (h *PaymentHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PaymentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 	if id == "" {
 		response.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
 
-	payment, err := h.paymentSvc.GetPayment(r.Context(), id)
+	payment, err := h.paymentSvc.GetPayment(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "payment not found")
 		return
@@ -61,13 +62,14 @@ func (h *PaymentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PaymentHandler) GetByBooking(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	bookingID := r.PathValue("bookingId")
 	if bookingID == "" {
 		response.Error(w, http.StatusBadRequest, "bookingId is required")
 		return
 	}
 
-	payment, err := h.paymentSvc.GetPaymentByBooking(r.Context(), bookingID)
+	payment, err := h.paymentSvc.GetPaymentByBooking(r.Context(), bookingID, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "payment not found for booking")
 		return

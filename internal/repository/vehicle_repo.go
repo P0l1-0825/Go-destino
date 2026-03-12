@@ -39,6 +39,20 @@ func (r *VehicleRepository) GetByID(ctx context.Context, id string) (*domain.Veh
 	return v, nil
 }
 
+func (r *VehicleRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Vehicle, error) {
+	v := &domain.Vehicle{}
+	query := `SELECT id, tenant_id, driver_id, company_id, plate, brand, model, year, color, type, capacity, status, insurance_id, insurance_exp, created_at, updated_at
+		FROM vehicles WHERE id = $1 AND tenant_id = $2`
+	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(
+		&v.ID, &v.TenantID, &v.DriverID, &v.CompanyID, &v.Plate, &v.Brand, &v.Model, &v.Year, &v.Color,
+		&v.Type, &v.Capacity, &v.Status, &v.InsuranceID, &v.InsuranceExp, &v.CreatedAt, &v.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 func (r *VehicleRepository) GetByDriverID(ctx context.Context, driverID string) (*domain.Vehicle, error) {
 	v := &domain.Vehicle{}
 	query := `SELECT id, tenant_id, driver_id, company_id, plate, brand, model, year, color, type, capacity, status, insurance_id, insurance_exp, created_at, updated_at
@@ -53,8 +67,22 @@ func (r *VehicleRepository) GetByDriverID(ctx context.Context, driverID string) 
 	return v, nil
 }
 
-func (r *VehicleRepository) UpdateStatus(ctx context.Context, id, status string) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE vehicles SET status=$1, updated_at=NOW() WHERE id=$2`, status, id)
+func (r *VehicleRepository) GetByDriverIDTenant(ctx context.Context, driverID, tenantID string) (*domain.Vehicle, error) {
+	v := &domain.Vehicle{}
+	query := `SELECT id, tenant_id, driver_id, company_id, plate, brand, model, year, color, type, capacity, status, insurance_id, insurance_exp, created_at, updated_at
+		FROM vehicles WHERE driver_id = $1 AND tenant_id = $2 AND status = 'active'`
+	err := r.db.QueryRowContext(ctx, query, driverID, tenantID).Scan(
+		&v.ID, &v.TenantID, &v.DriverID, &v.CompanyID, &v.Plate, &v.Brand, &v.Model, &v.Year, &v.Color,
+		&v.Type, &v.Capacity, &v.Status, &v.InsuranceID, &v.InsuranceExp, &v.CreatedAt, &v.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (r *VehicleRepository) UpdateStatus(ctx context.Context, id, tenantID, status string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE vehicles SET status=$1, updated_at=NOW() WHERE id=$2 AND tenant_id=$3`, status, id, tenantID)
 	return err
 }
 

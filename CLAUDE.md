@@ -104,11 +104,16 @@ pkg/response/            → Standard API response envelope
 ## Security
 
 - JWT HS256 with role + permissions in claims
+- JWT_SECRET validated at startup (min 32 chars, no known defaults → fatalf)
 - bcrypt password hashing (cost 12)
 - Rate limiting per user_id + IP
+- Token blacklist, login limiter, password reset: **Redis-backed** (graceful in-memory fallback)
+- Security interfaces: `TokenBlacklistStore`, `LoginLimiterStore`, `PasswordResetTokenStore`
+- Redis implementations: `redis_token_blacklist.go`, `redis_login_limiter.go`, `redis_password_reset.go`
 - Input validation before any DB query
-- Never log PII (emails, phones, full names)
+- Never log PII (emails, phones, full names) — tokens truncated to 8 chars in logs
 - Audit log on: payments, cancellations, role changes, tenant operations
+- Multi-tenant isolation: ALL SQL queries include `AND tenant_id = $N`
 
 ## Environment Variables
 

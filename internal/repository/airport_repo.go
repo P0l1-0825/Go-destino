@@ -32,6 +32,17 @@ func (r *AirportRepository) GetByID(ctx context.Context, id string) (*domain.Air
 	return a, nil
 }
 
+// GetByIDTenant is the tenant-scoped variant that prevents cross-tenant airport access.
+func (r *AirportRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Airport, error) {
+	a := &domain.Airport{}
+	query := `SELECT id, tenant_id, code, name, city, country, country_code, lat, lng, timezone, active FROM airports WHERE id=$1 AND tenant_id=$2`
+	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(&a.ID, &a.TenantID, &a.Code, &a.Name, &a.City, &a.Country, &a.CountryCode, &a.Lat, &a.Lng, &a.Timezone, &a.Active)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
 func (r *AirportRepository) GetByCode(ctx context.Context, code string) (*domain.Airport, error) {
 	a := &domain.Airport{}
 	query := `SELECT id, tenant_id, code, name, city, country, country_code, lat, lng, timezone, active FROM airports WHERE code=$1`

@@ -46,6 +46,15 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id string) (*domain.Pay
 	return p, nil
 }
 
+func (r *PaymentRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Payment, error) {
+	p := &domain.Payment{}
+	query := `SELECT ` + paymentColumns + ` FROM payments WHERE id = $1 AND tenant_id = $2`
+	if err := scanPayment(r.db.QueryRowContext(ctx, query, id, tenantID), p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 func (r *PaymentRepository) GetByReference(ctx context.Context, reference string) (*domain.Payment, error) {
 	p := &domain.Payment{}
 	query := `SELECT ` + paymentColumns + ` FROM payments WHERE reference = $1`
@@ -64,24 +73,33 @@ func (r *PaymentRepository) GetByBookingID(ctx context.Context, bookingID string
 	return p, nil
 }
 
-func (r *PaymentRepository) UpdateStatus(ctx context.Context, id string, status domain.PaymentStatus) error {
-	query := `UPDATE payments SET status = $1, updated_at = NOW() WHERE id = $2`
-	res, err := r.db.ExecContext(ctx, query, status, id)
+func (r *PaymentRepository) GetByBookingIDTenant(ctx context.Context, bookingID, tenantID string) (*domain.Payment, error) {
+	p := &domain.Payment{}
+	query := `SELECT ` + paymentColumns + ` FROM payments WHERE booking_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 1`
+	if err := scanPayment(r.db.QueryRowContext(ctx, query, bookingID, tenantID), p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (r *PaymentRepository) UpdateStatus(ctx context.Context, id, tenantID string, status domain.PaymentStatus) error {
+	query := `UPDATE payments SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	res, err := r.db.ExecContext(ctx, query, status, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "payment")
 }
 
-func (r *PaymentRepository) MarkFailed(ctx context.Context, id, reason string) error {
-	query := `UPDATE payments SET status = 'failed', failure_reason = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, query, reason, id)
+func (r *PaymentRepository) MarkFailed(ctx context.Context, id, tenantID, reason string) error {
+	query := `UPDATE payments SET status = 'failed', failure_reason = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	_, err := r.db.ExecContext(ctx, query, reason, id, tenantID)
 	return err
 }
 
-func (r *PaymentRepository) MarkRefunded(ctx context.Context, id string) error {
-	query := `UPDATE payments SET status = 'refunded', refunded_at = NOW(), updated_at = NOW() WHERE id = $1`
-	res, err := r.db.ExecContext(ctx, query, id)
+func (r *PaymentRepository) MarkRefunded(ctx context.Context, id, tenantID string) error {
+	query := `UPDATE payments SET status = 'refunded', refunded_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`
+	res, err := r.db.ExecContext(ctx, query, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -107,15 +125,15 @@ func (r *PaymentRepository) SumByTenant(ctx context.Context, tenantID string) (i
 	return total.Int64, nil
 }
 
-func (r *PaymentRepository) Refund(ctx context.Context, originalID string, refundPayment *domain.Payment) error {
+func (r *PaymentRepository) Refund(ctx context.Context, originalID, tenantID string, refundPayment *domain.Payment) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	updateQ := `UPDATE payments SET status = 'refunded', refunded_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'completed'`
-	res, err := tx.ExecContext(ctx, updateQ, originalID)
+	updateQ := `UPDATE payments SET status = 'refunded', refunded_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND status = 'completed'`
+	res, err := tx.ExecContext(ctx, updateQ, originalID, tenantID)
 	if err != nil {
 		return fmt.Errorf("marking refunded: %w", err)
 	}

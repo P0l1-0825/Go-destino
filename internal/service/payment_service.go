@@ -72,7 +72,7 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req ProcessPaymentR
 	// Process via payment gateway
 	gatewayErr := s.chargeGateway(ctx, payment)
 	if gatewayErr != nil {
-		_ = s.paymentRepo.MarkFailed(ctx, payment.ID, gatewayErr.Error())
+		_ = s.paymentRepo.MarkFailed(ctx, payment.ID, req.TenantID, gatewayErr.Error())
 		payment.Status = domain.PaymentFailed
 		payment.FailureReason = gatewayErr.Error()
 
@@ -83,7 +83,7 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req ProcessPaymentR
 	}
 
 	// Mark completed
-	if err := s.paymentRepo.UpdateStatus(ctx, payment.ID, domain.PaymentCompleted); err != nil {
+	if err := s.paymentRepo.UpdateStatus(ctx, payment.ID, req.TenantID, domain.PaymentCompleted); err != nil {
 		return nil, fmt.Errorf("completing payment: %w", err)
 	}
 	payment.Status = domain.PaymentCompleted
@@ -106,7 +106,7 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req ProcessPaymentR
 
 // RefundPayment processes a full refund and sends notifications.
 func (s *PaymentService) RefundPayment(ctx context.Context, paymentID, tenantID, userID, reason, lang string) (*domain.Payment, error) {
-	original, err := s.paymentRepo.GetByID(ctx, paymentID)
+	original, err := s.paymentRepo.GetByIDTenant(ctx, paymentID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("payment not found: %w", err)
 	}
@@ -134,7 +134,7 @@ func (s *PaymentService) RefundPayment(ctx context.Context, paymentID, tenantID,
 	}
 
 	// Persist refund in DB
-	if err := s.paymentRepo.Refund(ctx, paymentID, refund); err != nil {
+	if err := s.paymentRepo.Refund(ctx, paymentID, tenantID, refund); err != nil {
 		return nil, fmt.Errorf("processing refund: %w", err)
 	}
 
@@ -151,14 +151,14 @@ func (s *PaymentService) RefundPayment(ctx context.Context, paymentID, tenantID,
 	return refund, nil
 }
 
-// GetPayment retrieves a single payment.
-func (s *PaymentService) GetPayment(ctx context.Context, id string) (*domain.Payment, error) {
-	return s.paymentRepo.GetByID(ctx, id)
+// GetPayment retrieves a single payment (tenant-scoped).
+func (s *PaymentService) GetPayment(ctx context.Context, id, tenantID string) (*domain.Payment, error) {
+	return s.paymentRepo.GetByIDTenant(ctx, id, tenantID)
 }
 
-// GetPaymentByBooking retrieves the latest payment for a booking.
-func (s *PaymentService) GetPaymentByBooking(ctx context.Context, bookingID string) (*domain.Payment, error) {
-	return s.paymentRepo.GetByBookingID(ctx, bookingID)
+// GetPaymentByBooking retrieves the latest payment for a booking (tenant-scoped).
+func (s *PaymentService) GetPaymentByBooking(ctx context.Context, bookingID, tenantID string) (*domain.Payment, error) {
+	return s.paymentRepo.GetByBookingIDTenant(ctx, bookingID, tenantID)
 }
 
 // ListPayments lists payments for a tenant.

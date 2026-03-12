@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
+	"github.com/P0l1-0825/Go-destino/internal/middleware"
 	"github.com/P0l1-0825/Go-destino/internal/service"
 	"github.com/P0l1-0825/Go-destino/pkg/response"
 )
@@ -66,6 +67,7 @@ func (h *WSHandler) TrackDriver(w http.ResponseWriter, r *http.Request) {
 // PublishLocation receives location updates and broadcasts to subscribers.
 // POST /api/v1/track/publish
 func (h *WSHandler) PublishLocation(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	var loc domain.DriverLocation
 	if err := json.NewDecoder(r.Body).Decode(&loc); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
@@ -73,7 +75,7 @@ func (h *WSHandler) PublishLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Persist location
-	if err := h.fleetSvc.UpdateDriverLocation(r.Context(), loc); err != nil {
+	if err := h.fleetSvc.UpdateDriverLocation(r.Context(), tenantID, loc); err != nil {
 		log.Printf("[WS] failed to persist location: %v", err)
 	}
 

@@ -88,7 +88,7 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 		qr, err := generateQRCode()
 		if err != nil {
 			// Mark payment as failed if ticket generation fails
-			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, "ticket generation failed")
+			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, tenantID, "ticket generation failed")
 			return nil, fmt.Errorf("generating QR code: %w", err)
 		}
 
@@ -107,7 +107,7 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 		}
 
 		if err := s.ticketRepo.Create(ctx, &ticket); err != nil {
-			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, "ticket creation failed")
+			_ = s.paymentRepo.MarkFailed(ctx, payment.ID, tenantID, "ticket creation failed")
 			return nil, fmt.Errorf("creating ticket: %w", err)
 		}
 
@@ -115,7 +115,7 @@ func (s *TicketService) PurchaseTickets(ctx context.Context, tenantID, kioskID s
 	}
 
 	// Mark payment as completed after all tickets created
-	if err := s.paymentRepo.UpdateStatus(ctx, payment.ID, domain.PaymentCompleted); err != nil {
+	if err := s.paymentRepo.UpdateStatus(ctx, payment.ID, tenantID, domain.PaymentCompleted); err != nil {
 		return nil, fmt.Errorf("completing payment: %w", err)
 	}
 	payment.Status = domain.PaymentCompleted

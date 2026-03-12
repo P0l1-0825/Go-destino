@@ -19,9 +19,9 @@ import (
 type AuthService struct {
 	userRepo       *repository.UserRepository
 	jwtCfg         config.JWTConfig
-	loginLimiter   *security.LoginLimiter
-	tokenBlacklist *security.TokenBlacklist
-	resetStore     *security.PasswordResetStore
+	loginLimiter   security.LoginLimiterStore
+	tokenBlacklist security.TokenBlacklistStore
+	resetStore     security.PasswordResetTokenStore
 	passwordPolicy security.PasswordPolicy
 	auditFn        func(tenantID, userID, action, resource, resourceID, details, ip, ua string)
 }
@@ -29,9 +29,9 @@ type AuthService struct {
 type AuthServiceConfig struct {
 	UserRepo       *repository.UserRepository
 	JWTCfg         config.JWTConfig
-	LoginLimiter   *security.LoginLimiter
-	TokenBlacklist *security.TokenBlacklist
-	ResetStore     *security.PasswordResetStore
+	LoginLimiter   security.LoginLimiterStore
+	TokenBlacklist security.TokenBlacklistStore
+	ResetStore     security.PasswordResetTokenStore
 	AuditFn        func(tenantID, userID, action, resource, resourceID, details, ip, ua string)
 }
 
@@ -283,8 +283,8 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, tenantID, email 
 
 	s.audit(tenantID, user.ID, "password.reset_requested", "user", user.ID, "password reset requested", "", "")
 
-	// In production: send email with the token
-	log.Printf("[SECURITY] Password reset token for %s: %s (would be emailed in production)", email, token)
+	// In production: send email with the token — never log the full token
+	log.Printf("[SECURITY] Password reset token generated for %s (token=%s…)", email, token[:8])
 
 	return token, nil
 }

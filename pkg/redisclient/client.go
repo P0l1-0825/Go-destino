@@ -1,70 +1,45 @@
 package redisclient
 
 import (
+	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/P0l1-0825/Go-destino/internal/config"
 )
 
-// Client is a lightweight Redis connectivity wrapper.
-// Uses standard library net for health checks. The in-memory security
-// components handle token blacklisting, login limiting, and password resets.
-// Upgrade to go-redis/v9 when Redis-backed implementations are needed.
+// Client wraps go-redis/v9 for use by security components
+// and other Redis-backed features.
 type Client struct {
+	rdb  *redis.Client
 	addr string
 }
 
-// New creates a Redis client and verifies connectivity.
-// Sends AUTH if a password is configured, then PING to verify.
+// New creates a Redis client and verifies connectivity via PING.
 func New(cfg config.RedisConfig) (*Client, error) {
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 
-	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
-	if err != nil {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         addr,
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		DialTimeout:  3 * time.Second,
+		ReadTimeout:  2 * time.Second,
+		WriteTimeout: 2 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		rdb.Close()
 		return nil, fmt.Errorf("redis connect %s: %w", addr, err)
 	}
-	defer conn.Close()
 
-	// AUTH if password is set
-	if cfg.Password != "" {
-		authCmd := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(cfg.Password), cfg.Password)
-		if _, err := conn.Write([]byte(authCmd)); err != nil {
-			return nil, fmt.Errorf("redis auth write: %w", err)
-		}
-
-		buf := make([]byte, 64)
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		n, err := conn.Read(buf)
-		if err != nil {
-			return nil, fmt.Errorf("redis auth read: %w", err)
-		}
-		resp := string(buf[:n])
-		if !strings.HasPrefix(resp, "+OK") {
-			return nil, fmt.Errorf("redis auth failed: %s", strings.TrimSpace(resp))
-		}
-	}
-
-	// PING
-	if _, err := conn.Write([]byte("*1\r\n$4\r\nPING\r\n")); err != nil {
-		return nil, fmt.Errorf("redis ping: %w", err)
-	}
-
-	buf := make([]byte, 64)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := conn.Read(buf)
-	if err != nil {
-		return nil, fmt.Errorf("redis ping read: %w", err)
-	}
-
-	resp := string(buf[:n])
-	if !strings.HasPrefix(resp, "+PONG") {
-		return nil, fmt.Errorf("redis unexpected response: %s", strings.TrimSpace(resp))
-	}
-
-	return &Client{addr: addr}, nil
+	return &Client{rdb: rdb, addr: addr}, nil
 }
 
 // Addr returns the Redis server address.
@@ -74,10 +49,16 @@ func (c *Client) Addr() string {
 
 // Ping checks if Redis is reachable.
 func (c *Client) Ping() error {
-	conn, err := net.DialTimeout("tcp", c.addr, 2*time.Second)
-	if err != nil {
-		return err
-	}
-	conn.Close()
-	return nil
+	return c.rdb.Ping(context.Background()).Err()
+}
+
+// Close releases the underlying connection pool.
+func (c *Client) Close() error {
+	return c.rdb.Close()
+}
+
+// Unwrap returns the underlying go-redis client for use by
+// Redis-backed security components and other features.
+func (c *Client) Unwrap() *redis.Client {
+	return c.rdb
 }

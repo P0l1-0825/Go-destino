@@ -134,15 +134,15 @@ func (s *BookingService) GetByNumberTenant(ctx context.Context, number, tenantID
 	return s.bookingRepo.GetByNumberTenant(ctx, number, tenantID)
 }
 
-func (s *BookingService) Confirm(ctx context.Context, id string) error {
-	if err := s.transitionStatus(ctx, id, domain.BookingConfirmed); err != nil {
+func (s *BookingService) Confirm(ctx context.Context, id, tenantID string) error {
+	if err := s.transitionStatus(ctx, id, tenantID, domain.BookingConfirmed); err != nil {
 		return err
 	}
 
 	// Send confirmation notifications
 	if s.notifSvc != nil {
 		go func() {
-			booking, err := s.bookingRepo.GetByID(context.Background(), id)
+			booking, err := s.bookingRepo.GetByIDTenant(context.Background(), id, tenantID)
 			if err == nil {
 				s.notifSvc.SendBookingConfirmationFull(context.Background(), booking.TenantID, booking, "es")
 			}
@@ -152,15 +152,15 @@ func (s *BookingService) Confirm(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *BookingService) AssignDriver(ctx context.Context, id string, req domain.AssignDriverRequest) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) AssignDriver(ctx context.Context, id, tenantID string, req domain.AssignDriverRequest) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingAssigned); err != nil {
 		return err
 	}
-	if err := s.bookingRepo.AssignDriver(ctx, id, req.DriverID, req.VehicleID); err != nil {
+	if err := s.bookingRepo.AssignDriver(ctx, id, tenantID, req.DriverID, req.VehicleID); err != nil {
 		return err
 	}
 
@@ -175,26 +175,26 @@ func (s *BookingService) AssignDriver(ctx context.Context, id string, req domain
 	return nil
 }
 
-func (s *BookingService) StartTrip(ctx context.Context, id string) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) StartTrip(ctx context.Context, id, tenantID string) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingStarted); err != nil {
 		return err
 	}
-	return s.bookingRepo.SetStarted(ctx, id)
+	return s.bookingRepo.SetStarted(ctx, id, tenantID)
 }
 
-func (s *BookingService) CompleteBooking(ctx context.Context, id string) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) CompleteBooking(ctx context.Context, id, tenantID string) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingCompleted); err != nil {
 		return err
 	}
-	if err := s.bookingRepo.SetCompleted(ctx, id); err != nil {
+	if err := s.bookingRepo.SetCompleted(ctx, id, tenantID); err != nil {
 		return err
 	}
 
@@ -203,7 +203,7 @@ func (s *BookingService) CompleteBooking(ctx context.Context, id string) error {
 		go func() {
 			paymentMethod := "card"
 			if booking.PaymentID != "" && s.paymentRepo != nil {
-				p, err := s.paymentRepo.GetByID(context.Background(), booking.PaymentID)
+				p, err := s.paymentRepo.GetByIDTenant(context.Background(), booking.PaymentID, booking.TenantID)
 				if err == nil {
 					paymentMethod = string(p.Method)
 				}
@@ -215,15 +215,15 @@ func (s *BookingService) CompleteBooking(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *BookingService) Cancel(ctx context.Context, id, reason string) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) Cancel(ctx context.Context, id, tenantID, reason string) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
 	if err := domain.ValidBookingTransition(booking.Status, domain.BookingCancelled); err != nil {
 		return err
 	}
-	if err := s.bookingRepo.SetCancelled(ctx, id, reason); err != nil {
+	if err := s.bookingRepo.SetCancelled(ctx, id, tenantID, reason); err != nil {
 		return err
 	}
 
@@ -245,8 +245,8 @@ func (s *BookingService) Cancel(ctx context.Context, id, reason string) error {
 	return nil
 }
 
-func (s *BookingService) UpdateStatus(ctx context.Context, id string, status domain.BookingStatus) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) UpdateStatus(ctx context.Context, id, tenantID string, status domain.BookingStatus) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
@@ -256,13 +256,13 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id string, status dom
 
 	switch status {
 	case domain.BookingStarted:
-		return s.bookingRepo.SetStarted(ctx, id)
+		return s.bookingRepo.SetStarted(ctx, id, tenantID)
 	case domain.BookingCompleted:
-		return s.bookingRepo.SetCompleted(ctx, id)
+		return s.bookingRepo.SetCompleted(ctx, id, tenantID)
 	case domain.BookingCancelled:
-		return s.bookingRepo.SetCancelled(ctx, id, "")
+		return s.bookingRepo.SetCancelled(ctx, id, tenantID, "")
 	default:
-		return s.bookingRepo.UpdateStatus(ctx, id, status)
+		return s.bookingRepo.UpdateStatus(ctx, id, tenantID, status)
 	}
 }
 
@@ -317,15 +317,15 @@ func (s *BookingService) Estimate(req domain.EstimateRequest) (*domain.EstimateR
 	}, nil
 }
 
-func (s *BookingService) transitionStatus(ctx context.Context, id string, target domain.BookingStatus) error {
-	booking, err := s.bookingRepo.GetByID(ctx, id)
+func (s *BookingService) transitionStatus(ctx context.Context, id, tenantID string, target domain.BookingStatus) error {
+	booking, err := s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("booking not found: %w", err)
 	}
 	if err := domain.ValidBookingTransition(booking.Status, target); err != nil {
 		return err
 	}
-	return s.bookingRepo.UpdateStatus(ctx, id, target)
+	return s.bookingRepo.UpdateStatus(ctx, id, tenantID, target)
 }
 
 func generateBookingNumber() (string, error) {

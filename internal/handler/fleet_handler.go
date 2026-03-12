@@ -49,12 +49,13 @@ func (h *FleetHandler) RegisterVehicle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	var loc domain.DriverLocation
 	if err := json.NewDecoder(r.Body).Decode(&loc); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.fleetSvc.UpdateDriverLocation(r.Context(), loc); err != nil {
+	if err := h.fleetSvc.UpdateDriverLocation(r.Context(), tenantID, loc); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -62,6 +63,7 @@ func (h *FleetHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 	var req struct {
 		Status domain.DriverStatus `json:"status"`
@@ -70,7 +72,7 @@ func (h *FleetHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.fleetSvc.UpdateDriverStatus(r.Context(), id, req.Status); err != nil {
+	if err := h.fleetSvc.UpdateDriverStatus(r.Context(), id, tenantID, req.Status); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -78,8 +80,9 @@ func (h *FleetHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) GetDriver(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
-	driver, err := h.fleetSvc.GetDriver(r.Context(), id)
+	driver, err := h.fleetSvc.GetDriver(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "driver not found")
 		return
@@ -128,7 +131,8 @@ func (h *FleetHandler) RateDriver(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "rating must be between 1 and 5")
 		return
 	}
-	if err := h.fleetSvc.RateDriver(r.Context(), id, req.Rating); err != nil {
+	tenantID := middleware.GetTenantID(r.Context())
+	if err := h.fleetSvc.RateDriver(r.Context(), id, tenantID, req.Rating); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -136,6 +140,7 @@ func (h *FleetHandler) RateDriver(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) VerifyDocs(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 	var req struct {
 		Verified bool `json:"verified"`
@@ -144,7 +149,7 @@ func (h *FleetHandler) VerifyDocs(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.fleetSvc.VerifyDriverDocs(r.Context(), id, req.Verified); err != nil {
+	if err := h.fleetSvc.VerifyDriverDocs(r.Context(), id, tenantID, req.Verified); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -162,8 +167,9 @@ func (h *FleetHandler) ListVehicles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FleetHandler) GetVehicle(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
-	vehicle, err := h.fleetSvc.GetVehicle(r.Context(), id)
+	vehicle, err := h.fleetSvc.GetVehicle(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "vehicle not found")
 		return

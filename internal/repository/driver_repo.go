@@ -44,6 +44,23 @@ func (r *DriverRepository) GetByID(ctx context.Context, id string) (*domain.Driv
 	return d, nil
 }
 
+func (r *DriverRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Driver, error) {
+	d := &domain.Driver{}
+	query := `SELECT id, tenant_id, user_id, company_id, license_number, status, sub_role,
+		rating, total_trips, docs_verified, biometric_verified,
+		current_lat, current_lng, heading, speed, last_location_at, created_at, updated_at
+		FROM drivers WHERE id = $1 AND tenant_id = $2`
+	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(
+		&d.ID, &d.TenantID, &d.UserID, &d.CompanyID, &d.LicenseNumber, &d.Status, &d.SubRole,
+		&d.Rating, &d.TotalTrips, &d.DocsVerified, &d.BiometricVerified,
+		&d.CurrentLat, &d.CurrentLng, &d.Heading, &d.Speed, &d.LastLocationAt, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
 func (r *DriverRepository) GetByUserID(ctx context.Context, userID string) (*domain.Driver, error) {
 	d := &domain.Driver{}
 	query := `SELECT id, tenant_id, user_id, company_id, license_number, status, sub_role,
@@ -61,7 +78,7 @@ func (r *DriverRepository) GetByUserID(ctx context.Context, userID string) (*dom
 	return d, nil
 }
 
-func (r *DriverRepository) UpdateLocation(ctx context.Context, id string, lat, lng, heading, speed float64) error {
+func (r *DriverRepository) UpdateLocation(ctx context.Context, id, tenantID string, lat, lng, heading, speed float64) error {
 	// Dual-write: update drivers table and upsert driver_locations
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -70,8 +87,8 @@ func (r *DriverRepository) UpdateLocation(ctx context.Context, id string, lat, l
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE drivers SET current_lat=$1, current_lng=$2, heading=$3, speed=$4, last_location_at=NOW(), updated_at=NOW() WHERE id=$5`,
-		lat, lng, heading, speed, id)
+		`UPDATE drivers SET current_lat=$1, current_lng=$2, heading=$3, speed=$4, last_location_at=NOW(), updated_at=NOW() WHERE id=$5 AND tenant_id=$6`,
+		lat, lng, heading, speed, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -88,21 +105,21 @@ func (r *DriverRepository) UpdateLocation(ctx context.Context, id string, lat, l
 	return tx.Commit()
 }
 
-func (r *DriverRepository) UpdateStatus(ctx context.Context, id string, status domain.DriverStatus) error {
-	query := `UPDATE drivers SET status=$1, updated_at=NOW() WHERE id=$2`
-	_, err := r.db.ExecContext(ctx, query, status, id)
+func (r *DriverRepository) UpdateStatus(ctx context.Context, id, tenantID string, status domain.DriverStatus) error {
+	query := `UPDATE drivers SET status=$1, updated_at=NOW() WHERE id=$2 AND tenant_id=$3`
+	_, err := r.db.ExecContext(ctx, query, status, id, tenantID)
 	return err
 }
 
-func (r *DriverRepository) UpdateRating(ctx context.Context, id string, rating float64, totalTrips int) error {
-	query := `UPDATE drivers SET rating=$1, total_trips=$2, updated_at=NOW() WHERE id=$3`
-	_, err := r.db.ExecContext(ctx, query, rating, totalTrips, id)
+func (r *DriverRepository) UpdateRating(ctx context.Context, id, tenantID string, rating float64, totalTrips int) error {
+	query := `UPDATE drivers SET rating=$1, total_trips=$2, updated_at=NOW() WHERE id=$3 AND tenant_id=$4`
+	_, err := r.db.ExecContext(ctx, query, rating, totalTrips, id, tenantID)
 	return err
 }
 
-func (r *DriverRepository) SetDocsVerified(ctx context.Context, id string, verified bool) error {
-	query := `UPDATE drivers SET docs_verified=$1, updated_at=NOW() WHERE id=$2`
-	_, err := r.db.ExecContext(ctx, query, verified, id)
+func (r *DriverRepository) SetDocsVerified(ctx context.Context, id, tenantID string, verified bool) error {
+	query := `UPDATE drivers SET docs_verified=$1, updated_at=NOW() WHERE id=$2 AND tenant_id=$3`
+	_, err := r.db.ExecContext(ctx, query, verified, id, tenantID)
 	return err
 }
 
@@ -155,12 +172,12 @@ func (r *DriverRepository) GetActiveLocations(ctx context.Context, tenantID stri
 	return locs, rows.Err()
 }
 
-func (r *DriverRepository) ListByCompany(ctx context.Context, companyID string) ([]domain.Driver, error) {
+func (r *DriverRepository) ListByCompany(ctx context.Context, companyID, tenantID string) ([]domain.Driver, error) {
 	query := `SELECT id, tenant_id, user_id, company_id, license_number, status, sub_role,
 		rating, total_trips, docs_verified, biometric_verified,
 		current_lat, current_lng, heading, speed, last_location_at, created_at, updated_at
-		FROM drivers WHERE company_id=$1 ORDER BY rating DESC`
-	rows, err := r.db.QueryContext(ctx, query, companyID)
+		FROM drivers WHERE company_id=$1 AND tenant_id=$2 ORDER BY rating DESC`
+	rows, err := r.db.QueryContext(ctx, query, companyID, tenantID)
 	if err != nil {
 		return nil, err
 	}

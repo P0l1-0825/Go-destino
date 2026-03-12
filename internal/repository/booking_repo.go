@@ -89,54 +89,54 @@ func (r *BookingRepository) GetByUserID(ctx context.Context, tenantID, userID st
 	return r.queryBookings(ctx, query, tenantID, userID, limit, offset)
 }
 
-func (r *BookingRepository) UpdateStatus(ctx context.Context, id string, status domain.BookingStatus) error {
-	query := `UPDATE bookings SET status = $1, updated_at = NOW() WHERE id = $2`
-	res, err := r.db.ExecContext(ctx, query, status, id)
+func (r *BookingRepository) UpdateStatus(ctx context.Context, id, tenantID string, status domain.BookingStatus) error {
+	query := `UPDATE bookings SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	res, err := r.db.ExecContext(ctx, query, status, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "booking")
 }
 
-func (r *BookingRepository) AssignDriver(ctx context.Context, id, driverID, vehicleID string) error {
-	query := `UPDATE bookings SET driver_id = $1, vehicle_id = $2, status = 'assigned', updated_at = NOW() WHERE id = $3`
-	res, err := r.db.ExecContext(ctx, query, driverID, vehicleID, id)
+func (r *BookingRepository) AssignDriver(ctx context.Context, id, tenantID, driverID, vehicleID string) error {
+	query := `UPDATE bookings SET driver_id = $1, vehicle_id = $2, status = 'assigned', updated_at = NOW() WHERE id = $3 AND tenant_id = $4`
+	res, err := r.db.ExecContext(ctx, query, driverID, vehicleID, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "booking")
 }
 
-func (r *BookingRepository) SetStarted(ctx context.Context, id string) error {
-	query := `UPDATE bookings SET status = 'started', started_at = NOW(), updated_at = NOW() WHERE id = $1`
-	res, err := r.db.ExecContext(ctx, query, id)
+func (r *BookingRepository) SetStarted(ctx context.Context, id, tenantID string) error {
+	query := `UPDATE bookings SET status = 'started', started_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`
+	res, err := r.db.ExecContext(ctx, query, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "booking")
 }
 
-func (r *BookingRepository) SetCompleted(ctx context.Context, id string) error {
-	query := `UPDATE bookings SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1`
-	res, err := r.db.ExecContext(ctx, query, id)
+func (r *BookingRepository) SetCompleted(ctx context.Context, id, tenantID string) error {
+	query := `UPDATE bookings SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`
+	res, err := r.db.ExecContext(ctx, query, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "booking")
 }
 
-func (r *BookingRepository) SetCancelled(ctx context.Context, id, reason string) error {
-	query := `UPDATE bookings SET status = 'cancelled', cancel_reason = $1, cancelled_at = NOW(), updated_at = NOW() WHERE id = $2`
-	res, err := r.db.ExecContext(ctx, query, reason, id)
+func (r *BookingRepository) SetCancelled(ctx context.Context, id, tenantID, reason string) error {
+	query := `UPDATE bookings SET status = 'cancelled', cancel_reason = $1, cancelled_at = NOW(), updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	res, err := r.db.ExecContext(ctx, query, reason, id, tenantID)
 	if err != nil {
 		return err
 	}
 	return checkRowsAffected(res, "booking")
 }
 
-func (r *BookingRepository) SetPayment(ctx context.Context, id, paymentID string) error {
-	query := `UPDATE bookings SET payment_id = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, query, paymentID, id)
+func (r *BookingRepository) SetPayment(ctx context.Context, id, tenantID, paymentID string) error {
+	query := `UPDATE bookings SET payment_id = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`
+	_, err := r.db.ExecContext(ctx, query, paymentID, id, tenantID)
 	return err
 }
 

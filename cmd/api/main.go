@@ -22,6 +22,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	cfg.Validate()
 
 	// Database
 	db, err := repository.NewPostgresDB(cfg.Database)
@@ -42,13 +43,26 @@ func main() {
 		log.Printf("WARNING: Redis unavailable (%v) — using in-memory security components", err)
 	} else {
 		log.Printf("Redis connected at %s", redisClient.Addr())
+		defer redisClient.Close()
 	}
-	_ = redisClient // available for future Redis-backed features
 
-	// Security components (in-memory — upgrade to Redis-backed when interfaces are extracted)
-	tokenBlacklist := security.NewTokenBlacklist()
-	loginLimiter := security.NewLoginLimiter(5, 15*time.Minute, 30*time.Minute)
-	resetStore := security.NewPasswordResetStore()
+	// Security components — Redis-backed when available, in-memory fallback
+	var tokenBlacklist security.TokenBlacklistStore
+	var loginLimiter security.LoginLimiterStore
+	var resetStore security.PasswordResetTokenStore
+
+	if redisClient != nil {
+		rdb := redisClient.Unwrap()
+		tokenBlacklist = security.NewRedisTokenBlacklist(rdb)
+		loginLimiter = security.NewRedisLoginLimiter(rdb, 5, 15*time.Minute, 30*time.Minute)
+		resetStore = security.NewRedisPasswordResetStore(rdb)
+		log.Println("Security components: Redis-backed (token blacklist, login limiter, password reset)")
+	} else {
+		tokenBlacklist = security.NewTokenBlacklist()
+		loginLimiter = security.NewLoginLimiter(5, 15*time.Minute, 30*time.Minute)
+		resetStore = security.NewPasswordResetStore()
+		log.Println("Security components: in-memory (single-instance only)")
+	}
 
 	// Repositories
 	userRepo := repository.NewUserRepository(db)

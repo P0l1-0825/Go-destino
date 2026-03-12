@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"strconv"
@@ -133,6 +134,18 @@ func Load() *Config {
 	}
 
 	return cfg
+}
+
+// Validate checks for insecure defaults that must not reach production.
+// It fatals if JWT_SECRET is still the default value in non-development environments.
+func (c *Config) Validate() {
+	if c.Server.Env != "development" && c.JWT.Secret == "change-me-in-production" {
+		log.Fatal("FATAL: JWT_SECRET must be set via environment variable in production. " +
+			"Do not use the default value. Set JWT_SECRET and restart.")
+	}
+	if len(c.JWT.Secret) < 32 {
+		log.Printf("WARNING: JWT_SECRET is shorter than 32 characters — consider using a longer secret for security")
+	}
 }
 
 // parseDatabaseURL parses a PostgreSQL connection string like:
