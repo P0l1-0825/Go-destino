@@ -139,12 +139,13 @@ func main() {
 	wsH := handler.NewWSHandler(fleetSvc)
 	kioskUXH := handler.NewKioskUXHandler(kioskUXSvc)
 	kioskMonH := handler.NewKioskMonitorHandler(kioskMonSvc)
+	qrH := handler.NewQRHandler(bookingSvc, ticketSvc)
 
 	// Router
 	r := router.New(
 		authSvc, authH, routeH, ticketH, bookingH, kioskH,
 		fleetH, aiH, analyticsH, notifH, voucherH, shiftH, adminH,
-		flightH, safetyH, wsH, kioskUXH, kioskMonH, paymentH,
+		flightH, safetyH, wsH, kioskUXH, kioskMonH, paymentH, qrH,
 		corsCfg,
 	)
 
@@ -160,7 +161,7 @@ func main() {
 
 	go func() {
 		log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
-		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, kiosk-monitor, fleet, ai, analytics, notifications, payments, vouchers, shifts, admin, flights, safety, tracking")
+		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, kiosk-monitor, fleet, ai, analytics, notifications, payments, vouchers, shifts, admin, flights, safety, tracking, qr")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

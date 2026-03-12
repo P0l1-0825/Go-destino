@@ -103,6 +103,11 @@ const (
 	PermKioskCommissionView Permission = "kiosk.commission.view"
 )
 
+// QR validation permissions.
+const (
+	PermQRValidate Permission = "qr.validate"
+)
+
 // AllPermissions returns every permission defined in the system.
 func AllPermissions() []Permission {
 	return []Permission{
@@ -127,6 +132,7 @@ func AllPermissions() []Permission {
 		PermSysSettingsView, PermSysSettingsEdit, PermSysAuditLog, PermSysAPIKeys, PermSysWebhooks,
 		PermKioskBookCreate, PermKioskPrintTicket, PermKioskOfflineSync,
 		PermKioskShiftOpen, PermKioskShiftClose, PermKioskCommissionView,
+		PermQRValidate,
 	}
 }
 
@@ -169,6 +175,7 @@ var RolePermissions = map[UserRole][]Permission{
 		PermAnalyticsKPIAirport, PermAnalyticsKPIBasic,
 		PermAIInsightsView, PermAIDemandForecast,
 		PermSysKioskView,
+		PermQRValidate,
 	},
 	RoleOperador: {
 		PermResReadAirport,
@@ -181,6 +188,7 @@ var RolePermissions = map[UserRole][]Permission{
 		PermFleetLocationOwn, PermFleetStatusOwn, PermFleetVehicleOwn,
 		PermAnalyticsKPIBasic,
 		PermAIChat,
+		PermQRValidate,
 	},
 	RoleVendedor: {
 		PermResCreateWeb, PermResReadAirport, PermResCancelOwn, PermResPriceEstimate,
@@ -189,6 +197,7 @@ var RolePermissions = map[UserRole][]Permission{
 		PermAnalyticsKPIBasic,
 		PermKioskBookCreate, PermKioskPrintTicket, PermKioskShiftOpen,
 		PermKioskShiftClose, PermKioskCommissionView,
+		PermQRValidate,
 	},
 	RoleBroker: {
 		PermResCreateAPI, PermResReadOwn, PermResCancelOwn, PermResPriceEstimate,

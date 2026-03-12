@@ -30,6 +30,7 @@ func New(
 	kioskUXH *handler.KioskUXHandler,
 	kioskMonH *handler.KioskMonitorHandler,
 	paymentH *handler.PaymentHandler,
+	qrH *handler.QRHandler,
 	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -180,6 +181,10 @@ func New(
 	mux.Handle("GET /api/v1/track/driver/{id}", applyAuth(authSvc, http.HandlerFunc(wsH.TrackDriver)))
 	mux.Handle("POST /api/v1/track/publish", applyAuthPerm(authSvc, domain.PermFleetLocationOwn, http.HandlerFunc(wsH.PublishLocation)))
 	mux.Handle("GET /api/v1/track/drivers", applyAuthPerm(authSvc, domain.PermFleetLocationView, http.HandlerFunc(wsH.DriverLocations)))
+
+	// QR code validation
+	mux.Handle("POST /api/v1/qr/validate", applyAuthPerm(authSvc, domain.PermQRValidate, http.HandlerFunc(qrH.Validate)))
+	mux.Handle("GET /api/v1/qr/lookup/{code}", applyAuthPerm(authSvc, domain.PermQRValidate, http.HandlerFunc(qrH.Lookup)))
 
 	// Admin
 	mux.Handle("POST /api/v1/admin/tenants", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(adminH.CreateTenant)))
