@@ -46,3 +46,13 @@ func (r *NotificationRepository) ListByUser(ctx context.Context, userID string, 
 	}
 	return notifs, rows.Err()
 }
+
+func (r *NotificationRepository) MarkRead(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=NOW() WHERE id=$1`, id)
+	return err
+}
+
+func (r *NotificationRepository) MarkAllRead(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND read_at IS NULL`, userID)
+	return err
+}

@@ -80,3 +80,13 @@ func (s *ShiftService) ListShifts(ctx context.Context, sellerID string, limit in
 	}
 	return s.shiftRepo.ListBySeller(ctx, sellerID, limit)
 }
+
+func (s *ShiftService) ListByKiosk(ctx context.Context, kioskID string, limit int) ([]domain.ShiftRecord, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.shiftRepo.ListByKiosk(ctx, kioskID, limit)
+}

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
@@ -48,4 +49,55 @@ func (h *VoucherHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, result)
+}
+
+func (h *VoucherHandler) List(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	vouchers, err := h.voucherSvc.List(r.Context(), tenantID, limit, offset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, vouchers)
+}
+
+func (h *VoucherHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	voucher, err := h.voucherSvc.GetByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "voucher not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, voucher)
+}
+
+func (h *VoucherHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	code := r.PathValue("code")
+	if code == "" {
+		response.Error(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	voucher, err := h.voucherSvc.GetByCode(r.Context(), code, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "voucher not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, voucher)
 }

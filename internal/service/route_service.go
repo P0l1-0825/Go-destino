@@ -50,3 +50,30 @@ func (s *RouteService) ListByTenant(ctx context.Context, tenantID string) ([]dom
 func (s *RouteService) ListByTransportType(ctx context.Context, tenantID string, transportType domain.TransportType) ([]domain.Route, error) {
 	return s.routeRepo.ListByTransportType(ctx, tenantID, transportType)
 }
+
+func (s *RouteService) Update(ctx context.Context, id, tenantID string, req domain.CreateRouteRequest) (*domain.Route, error) {
+	existing, err := s.routeRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("route not found: %w", err)
+	}
+	if existing.TenantID != tenantID {
+		return nil, fmt.Errorf("route not found")
+	}
+
+	existing.Name = req.Name
+	existing.Code = req.Code
+	existing.TransportType = req.TransportType
+	existing.Origin = req.Origin
+	existing.Destination = req.Destination
+	existing.PriceCents = req.PriceCents
+	existing.Currency = req.Currency
+
+	if err := s.routeRepo.Update(ctx, existing); err != nil {
+		return nil, fmt.Errorf("updating route: %w", err)
+	}
+	return existing, nil
+}
+
+func (s *RouteService) Deactivate(ctx context.Context, id, tenantID string) error {
+	return s.routeRepo.Deactivate(ctx, id, tenantID)
+}

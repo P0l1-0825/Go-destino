@@ -92,6 +92,21 @@ func (s *VoucherService) Redeem(ctx context.Context, tenantID, redeemedBy string
 	}, nil
 }
 
+func (s *VoucherService) List(ctx context.Context, tenantID string, limit, offset int) ([]domain.Voucher, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	return s.voucherRepo.List(ctx, tenantID, limit, offset)
+}
+
+func (s *VoucherService) GetByID(ctx context.Context, id string) (*domain.Voucher, error) {
+	return s.voucherRepo.GetByID(ctx, id)
+}
+
+func (s *VoucherService) GetByCode(ctx context.Context, code, tenantID string) (*domain.Voucher, error) {
+	return s.voucherRepo.GetByCodeTenant(ctx, code, tenantID)
+}
+
 func generateVoucherCode() (string, error) {
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {

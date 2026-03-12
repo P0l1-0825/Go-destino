@@ -57,10 +57,28 @@ func (r *BookingRepository) GetByID(ctx context.Context, id string) (*domain.Boo
 	return b, nil
 }
 
+func (r *BookingRepository) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Booking, error) {
+	b := &domain.Booking{}
+	query := `SELECT ` + bookingColumns + ` FROM bookings WHERE id = $1 AND tenant_id = $2`
+	if err := scanBooking(r.db.QueryRowContext(ctx, query, id, tenantID), b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 func (r *BookingRepository) GetByNumber(ctx context.Context, number string) (*domain.Booking, error) {
 	b := &domain.Booking{}
 	query := `SELECT ` + bookingColumns + ` FROM bookings WHERE booking_number = $1`
 	if err := scanBooking(r.db.QueryRowContext(ctx, query, number), b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (r *BookingRepository) GetByNumberTenant(ctx context.Context, number, tenantID string) (*domain.Booking, error) {
+	b := &domain.Booking{}
+	query := `SELECT ` + bookingColumns + ` FROM bookings WHERE booking_number = $1 AND tenant_id = $2`
+	if err := scanBooking(r.db.QueryRowContext(ctx, query, number, tenantID), b); err != nil {
 		return nil, err
 	}
 	return b, nil

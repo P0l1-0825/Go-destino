@@ -29,6 +29,7 @@ func New(
 	wsH *handler.WSHandler,
 	kioskUXH *handler.KioskUXHandler,
 	kioskMonH *handler.KioskMonitorHandler,
+	paymentH *handler.PaymentHandler,
 	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -53,11 +54,14 @@ func New(
 	mux.Handle("POST /api/v1/routes", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(routeH.Create)))
 	mux.Handle("GET /api/v1/routes/{id}", applyAuth(authSvc, http.HandlerFunc(routeH.GetByID)))
 	mux.Handle("GET /api/v1/routes", applyAuth(authSvc, http.HandlerFunc(routeH.List)))
+	mux.Handle("PUT /api/v1/routes/{id}", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(routeH.Update)))
+	mux.Handle("DELETE /api/v1/routes/{id}", applyAuthPerm(authSvc, domain.PermSysSettingsEdit, http.HandlerFunc(routeH.Delete)))
 
 	// Tickets (kiosk operations)
 	mux.Handle("POST /api/v1/tickets/purchase", applyAuthPerm(authSvc, domain.PermKioskBookCreate, http.HandlerFunc(ticketH.Purchase)))
 	mux.Handle("POST /api/v1/tickets/validate", applyAuth(authSvc, http.HandlerFunc(ticketH.Validate)))
 	mux.Handle("GET /api/v1/tickets/{id}", applyAuth(authSvc, http.HandlerFunc(ticketH.GetByID)))
+	mux.Handle("PUT /api/v1/tickets/{id}/cancel", applyAuth(authSvc, http.HandlerFunc(ticketH.Cancel)))
 
 	// Bookings
 	mux.Handle("POST /api/v1/bookings", applyAuthPerm(authSvc, domain.PermResCreateWeb, http.HandlerFunc(bookingH.Create)))
@@ -68,6 +72,7 @@ func New(
 	mux.Handle("PUT /api/v1/bookings/{id}/status", applyAuthPerm(authSvc, domain.PermResAssignDriver, http.HandlerFunc(bookingH.UpdateStatus)))
 	mux.Handle("POST /api/v1/bookings/{id}/assign", applyAuthPerm(authSvc, domain.PermResAssignDriver, http.HandlerFunc(bookingH.AssignDriver)))
 	mux.Handle("POST /api/v1/bookings/estimate", applyAuthPerm(authSvc, domain.PermResPriceEstimate, http.HandlerFunc(bookingH.Estimate)))
+	mux.Handle("PUT /api/v1/bookings/{id}/start", applyAuthPerm(authSvc, domain.PermResAssignDriver, http.HandlerFunc(bookingH.StartTrip)))
 
 	// Kiosks
 	mux.Handle("POST /api/v1/kiosks/register", applyAuthPerm(authSvc, domain.PermSysKioskManage, http.HandlerFunc(kioskH.Register)))
@@ -131,19 +136,32 @@ func New(
 	mux.Handle("GET /api/v1/analytics/funnel", applyAuthPerm(authSvc, domain.PermAnalyticsReports, http.HandlerFunc(analyticsH.BookingFunnel)))
 	mux.Handle("GET /api/v1/analytics/slo", applyAuthPerm(authSvc, domain.PermAnalyticsSLO, http.HandlerFunc(analyticsH.SLO)))
 
+	// Payments
+	mux.Handle("GET /api/v1/payments", applyAuthPerm(authSvc, domain.PermPayCharge, http.HandlerFunc(paymentH.List)))
+	mux.Handle("GET /api/v1/payments/{id}", applyAuthPerm(authSvc, domain.PermPayCharge, http.HandlerFunc(paymentH.GetByID)))
+	mux.Handle("GET /api/v1/payments/booking/{bookingId}", applyAuth(authSvc, http.HandlerFunc(paymentH.GetByBooking)))
+	mux.Handle("POST /api/v1/payments/{id}/refund", applyAuthPerm(authSvc, domain.PermPayRefundAny, http.HandlerFunc(paymentH.Refund)))
+
 	// Notifications
 	mux.Handle("POST /api/v1/notifications", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(notifH.Send)))
 	mux.Handle("GET /api/v1/notifications/user/{id}", applyAuth(authSvc, http.HandlerFunc(notifH.GetUserNotifications)))
+	mux.Handle("PUT /api/v1/notifications/{id}/read", applyAuth(authSvc, http.HandlerFunc(notifH.MarkRead)))
+	mux.Handle("PUT /api/v1/notifications/read-all", applyAuth(authSvc, http.HandlerFunc(notifH.MarkAllRead)))
 
 	// Vouchers
 	mux.Handle("POST /api/v1/vouchers", applyAuthPerm(authSvc, domain.PermPayVoucherCreate, http.HandlerFunc(voucherH.Create)))
 	mux.Handle("POST /api/v1/vouchers/redeem", applyAuthPerm(authSvc, domain.PermPayVoucherRedeem, http.HandlerFunc(voucherH.Redeem)))
+	mux.Handle("GET /api/v1/vouchers", applyAuth(authSvc, http.HandlerFunc(voucherH.List)))
+	mux.Handle("GET /api/v1/vouchers/{id}", applyAuth(authSvc, http.HandlerFunc(voucherH.GetByID)))
+	mux.Handle("GET /api/v1/vouchers/code/{code}", applyAuth(authSvc, http.HandlerFunc(voucherH.GetByCode)))
 
 	// Shifts (POS)
 	mux.Handle("POST /api/v1/shifts", applyAuthPerm(authSvc, domain.PermKioskShiftOpen, http.HandlerFunc(shiftH.Open)))
 	mux.Handle("PUT /api/v1/shifts/{id}/close", applyAuthPerm(authSvc, domain.PermKioskShiftClose, http.HandlerFunc(shiftH.Close)))
 	mux.Handle("GET /api/v1/shifts/active", applyAuth(authSvc, http.HandlerFunc(shiftH.GetActive)))
 	mux.Handle("GET /api/v1/shifts", applyAuth(authSvc, http.HandlerFunc(shiftH.List)))
+	mux.Handle("GET /api/v1/shifts/{id}", applyAuth(authSvc, http.HandlerFunc(shiftH.GetByID)))
+	mux.Handle("GET /api/v1/shifts/kiosk/{kioskId}", applyAuthPerm(authSvc, domain.PermSysKioskView, http.HandlerFunc(shiftH.ListByKiosk)))
 
 	// Flights & IROPS
 	mux.Handle("GET /api/v1/flights/{number}", applyAuth(authSvc, http.HandlerFunc(flightH.GetFlightStatus)))
@@ -152,6 +170,8 @@ func New(
 
 	// Safety & SOS
 	mux.Handle("POST /api/v1/safety/incidents", applyAuth(authSvc, http.HandlerFunc(safetyH.ReportIncident)))
+	mux.Handle("GET /api/v1/safety/incidents", applyAuthPerm(authSvc, domain.PermSysAuditLog, http.HandlerFunc(safetyH.ListIncidents)))
+	mux.Handle("GET /api/v1/safety/incidents/{id}", applyAuth(authSvc, http.HandlerFunc(safetyH.GetIncident)))
 	mux.Handle("POST /api/v1/safety/sos", applyAuth(authSvc, http.HandlerFunc(safetyH.TriggerSOS)))
 	mux.Handle("PUT /api/v1/safety/sos/{id}/resolve", applyAuthPerm(authSvc, domain.PermResOverrideAI, http.HandlerFunc(safetyH.ResolveSOS)))
 	mux.HandleFunc("GET /api/v1/safety/emergency-numbers", safetyH.GetEmergencyNumbers)
@@ -166,6 +186,12 @@ func New(
 	mux.Handle("GET /api/v1/admin/tenants", applyAuthPerm(authSvc, domain.PermSysSettingsView, http.HandlerFunc(adminH.ListTenants)))
 	mux.Handle("GET /api/v1/admin/tenants/{id}", applyAuthPerm(authSvc, domain.PermSysSettingsView, http.HandlerFunc(adminH.GetTenant)))
 	mux.Handle("GET /api/v1/admin/users", applyAuthPerm(authSvc, domain.PermSysUsersRead, http.HandlerFunc(adminH.ListUsers)))
+	mux.Handle("GET /api/v1/admin/users/{id}", applyAuthPerm(authSvc, domain.PermSysUsersRead, http.HandlerFunc(adminH.GetUser)))
+	mux.Handle("POST /api/v1/admin/users", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(adminH.CreateUser)))
+	mux.Handle("PUT /api/v1/admin/users/{id}", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(adminH.UpdateUser)))
+	mux.Handle("PUT /api/v1/admin/users/{id}/activate", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(adminH.ActivateUser)))
+	mux.Handle("PUT /api/v1/admin/users/{id}/deactivate", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(adminH.DeactivateUser)))
+	mux.Handle("PUT /api/v1/admin/users/{id}/role", applyAuthPerm(authSvc, domain.PermSysRolesAssign, http.HandlerFunc(adminH.UpdateUserRole)))
 	mux.Handle("POST /api/v1/admin/airports", applyAuthPerm(authSvc, domain.PermSysAirportsManage, http.HandlerFunc(adminH.CreateAirport)))
 	mux.Handle("GET /api/v1/admin/airports", applyAuthPerm(authSvc, domain.PermSysAirportsRead, http.HandlerFunc(adminH.ListAirports)))
 	mux.Handle("GET /api/v1/admin/airports/{id}", applyAuthPerm(authSvc, domain.PermSysAirportsRead, http.HandlerFunc(adminH.GetAirport)))

@@ -36,3 +36,5 @@ redisdata/
 
 # Temp
 tmp/
+bin/
+.claude/

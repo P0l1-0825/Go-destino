@@ -18,6 +18,7 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=dev-secret-change-in-production
       - JWT_EXPIRE_HOURS=24
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,https://godestino-kiosk.direccion-2ac.workers.dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,6 +38,10 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql
       - ./migrations/002_v2_modules.sql:/docker-entrypoint-initdb.d/002_v2_modules.sql
+      - ./migrations/003_v3_robustify.sql:/docker-entrypoint-initdb.d/003_v3_robustify.sql
+      - ./migrations/004_v4_kiosk_ux.sql:/docker-entrypoint-initdb.d/004_v4_kiosk_ux.sql
+      - ./migrations/005_v5_kiosk_monitoring.sql:/docker-entrypoint-initdb.d/005_v5_kiosk_monitoring.sql
+      - ./migrations/006_v6_stabilization.sql:/docker-entrypoint-initdb.d/006_v6_stabilization.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U destino"]
       interval: 5s

@@ -67,3 +67,40 @@ func (h *RouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, routes)
 }
+
+func (h *RouteHandler) Update(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	var req domain.CreateRouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	route, err := h.routeSvc.Update(r.Context(), id, tenantID, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, route)
+}
+
+func (h *RouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	if err := h.routeSvc.Deactivate(r.Context(), id, tenantID); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "deactivated"})
+}

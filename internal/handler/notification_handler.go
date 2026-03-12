@@ -43,3 +43,25 @@ func (h *NotificationHandler) GetUserNotifications(w http.ResponseWriter, r *htt
 	}
 	response.JSON(w, http.StatusOK, notifs)
 }
+
+func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	if err := h.notifSvc.MarkRead(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "read"})
+}
+
+func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if err := h.notifSvc.MarkAllRead(r.Context(), userID); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "all read"})
+}

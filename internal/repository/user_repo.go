@@ -74,6 +74,15 @@ func (r *UserRepository) ChangePassword(ctx context.Context, userID, newHash str
 	return checkRowsAffected(res, "user")
 }
 
+func (r *UserRepository) UpdateRole(ctx context.Context, id string, role domain.UserRole) error {
+	query := `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`
+	res, err := r.db.ExecContext(ctx, query, role, id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "user")
+}
+
 func (r *UserRepository) Deactivate(ctx context.Context, id string) error {
 	query := `UPDATE users SET active = false, updated_at = NOW() WHERE id = $1`
 	res, err := r.db.ExecContext(ctx, query, id)

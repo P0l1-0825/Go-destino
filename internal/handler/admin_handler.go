@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
 	"github.com/P0l1-0825/Go-destino/internal/repository"
@@ -12,6 +14,11 @@ import (
 	"github.com/P0l1-0825/Go-destino/pkg/response"
 	"github.com/google/uuid"
 )
+
+func hashPassword(password string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	return string(h), err
+}
 
 type AdminHandler struct {
 	tenantRepo  *repository.TenantRepository
@@ -91,6 +98,174 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, users)
+}
+
+// Get single user
+func (h *AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	user, err := h.userRepo.GetByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, user)
+}
+
+// Create user (admin-created accounts)
+func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	var req domain.CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Email == "" || req.Password == "" || req.Name == "" {
+		response.Error(w, http.StatusBadRequest, "email, password and name are required")
+		return
+	}
+
+	exists, _ := h.userRepo.ExistsByEmail(r.Context(), tenantID, req.Email)
+	if exists {
+		response.Error(w, http.StatusConflict, "email already registered")
+		return
+	}
+
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	user := &domain.User{
+		ID:           uuid.New().String(),
+		TenantID:     tenantID,
+		Email:        req.Email,
+		Phone:        req.Phone,
+		PasswordHash: hash,
+		Name:         req.Name,
+		Role:         req.Role,
+		SubRole:      req.SubRole,
+		CompanyID:    req.CompanyID,
+		Lang:         req.Lang,
+		Active:       true,
+	}
+	if user.Role == "" {
+		user.Role = domain.RoleUsuario
+	}
+	if user.Lang == "" {
+		user.Lang = "es"
+	}
+
+	if err := h.userRepo.Create(r.Context(), user); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.auditSvc.Log(r.Context(), tenantID, middleware.GetUserID(r.Context()), "create", "user", user.ID, "Created user: "+req.Email, r.RemoteAddr, r.UserAgent())
+	response.JSON(w, http.StatusCreated, user)
+}
+
+// Update user profile fields
+func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+
+	user, err := h.userRepo.GetByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	var req struct {
+		Name      *string `json:"name"`
+		Phone     *string `json:"phone"`
+		SubRole   *string `json:"sub_role"`
+		CompanyID *string `json:"company_id"`
+		Lang      *string `json:"lang"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Name != nil {
+		user.Name = *req.Name
+	}
+	if req.Phone != nil {
+		user.Phone = *req.Phone
+	}
+	if req.SubRole != nil {
+		user.SubRole = *req.SubRole
+	}
+	if req.CompanyID != nil {
+		user.CompanyID = *req.CompanyID
+	}
+	if req.Lang != nil {
+		user.Lang = *req.Lang
+	}
+
+	if err := h.userRepo.Update(r.Context(), user); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.auditSvc.Log(r.Context(), tenantID, middleware.GetUserID(r.Context()), "update", "user", id, "Updated user profile", r.RemoteAddr, r.UserAgent())
+	response.JSON(w, http.StatusOK, user)
+}
+
+// Activate user
+func (h *AdminHandler) ActivateUser(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+
+	if err := h.userRepo.Activate(r.Context(), id); err != nil {
+		response.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	h.auditSvc.Log(r.Context(), tenantID, middleware.GetUserID(r.Context()), "activate", "user", id, "Activated user", r.RemoteAddr, r.UserAgent())
+	response.JSON(w, http.StatusOK, map[string]string{"status": "activated"})
+}
+
+// Deactivate user
+func (h *AdminHandler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+
+	if err := h.userRepo.Deactivate(r.Context(), id); err != nil {
+		response.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	h.auditSvc.Log(r.Context(), tenantID, middleware.GetUserID(r.Context()), "deactivate", "user", id, "Deactivated user", r.RemoteAddr, r.UserAgent())
+	response.JSON(w, http.StatusOK, map[string]string{"status": "deactivated"})
+}
+
+// Update user role
+func (h *AdminHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	id := r.PathValue("id")
+
+	var req struct {
+		Role domain.UserRole `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Role == "" {
+		response.Error(w, http.StatusBadRequest, "role is required")
+		return
+	}
+
+	if err := h.userRepo.UpdateRole(r.Context(), id, req.Role); err != nil {
+		response.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	h.auditSvc.Log(r.Context(), tenantID, middleware.GetUserID(r.Context()), "update_role", "user", id, "Changed role to: "+string(req.Role), r.RemoteAddr, r.UserAgent())
+	response.JSON(w, http.StatusOK, map[string]string{"status": "role_updated", "role": string(req.Role)})
 }
 
 // Airport management

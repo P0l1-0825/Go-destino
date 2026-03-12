@@ -122,8 +122,16 @@ func (s *BookingService) GetByID(ctx context.Context, id string) (*domain.Bookin
 	return s.bookingRepo.GetByID(ctx, id)
 }
 
+func (s *BookingService) GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Booking, error) {
+	return s.bookingRepo.GetByIDTenant(ctx, id, tenantID)
+}
+
 func (s *BookingService) GetByNumber(ctx context.Context, number string) (*domain.Booking, error) {
 	return s.bookingRepo.GetByNumber(ctx, number)
+}
+
+func (s *BookingService) GetByNumberTenant(ctx context.Context, number, tenantID string) (*domain.Booking, error) {
+	return s.bookingRepo.GetByNumberTenant(ctx, number, tenantID)
 }
 
 func (s *BookingService) Confirm(ctx context.Context, id string) error {

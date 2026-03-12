@@ -36,6 +36,57 @@ func (r *VoucherRepository) GetByCode(ctx context.Context, code string) (*domain
 	return v, nil
 }
 
+func (r *VoucherRepository) GetByID(ctx context.Context, id string) (*domain.Voucher, error) {
+	v := &domain.Voucher{}
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+		FROM vouchers WHERE id=$1`
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+		&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (r *VoucherRepository) List(ctx context.Context, tenantID string, limit, offset int) ([]domain.Voucher, error) {
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+		FROM vouchers WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	rows, err := r.db.QueryContext(ctx, query, tenantID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vouchers []domain.Voucher
+	for rows.Next() {
+		var v domain.Voucher
+		if err := rows.Scan(
+			&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+			&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, v)
+	}
+	return vouchers, rows.Err()
+}
+
+func (r *VoucherRepository) GetByCodeTenant(ctx context.Context, code, tenantID string) (*domain.Voucher, error) {
+	v := &domain.Voucher{}
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+		FROM vouchers WHERE code=$1 AND tenant_id=$2`
+	err := r.db.QueryRowContext(ctx, query, code, tenantID).Scan(
+		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+		&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 func (r *VoucherRepository) Redeem(ctx context.Context, id, redeemedBy string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE vouchers SET status='redeemed', redeemed_by=$1, redeemed_at=NOW() WHERE id=$2`, redeemedBy, id)
 	return err

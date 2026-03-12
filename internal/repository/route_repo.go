@@ -64,6 +64,27 @@ func (r *RouteRepository) ListByTenant(ctx context.Context, tenantID string) ([]
 	return routes, rows.Err()
 }
 
+func (r *RouteRepository) Update(ctx context.Context, route *domain.Route) error {
+	query := `UPDATE routes SET name=$1, code=$2, transport_type=$3, origin=$4, destination=$5, price_cents=$6, currency=$7, active=$8, updated_at=NOW()
+		WHERE id=$9 AND tenant_id=$10`
+	res, err := r.db.ExecContext(ctx, query,
+		route.Name, route.Code, route.TransportType, route.Origin, route.Destination,
+		route.PriceCents, route.Currency, route.Active, route.ID, route.TenantID,
+	)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "route")
+}
+
+func (r *RouteRepository) Deactivate(ctx context.Context, id, tenantID string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE routes SET active=false, updated_at=NOW() WHERE id=$1 AND tenant_id=$2`, id, tenantID)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "route")
+}
+
 func (r *RouteRepository) ListByTransportType(ctx context.Context, tenantID string, transportType domain.TransportType) ([]domain.Route, error) {
 	query := `SELECT id, tenant_id, name, code, transport_type, origin, destination, price_cents, currency, active, created_at, updated_at
 		FROM routes WHERE tenant_id = $1 AND transport_type = $2 AND active = true ORDER BY name`

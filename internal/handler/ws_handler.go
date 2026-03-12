@@ -86,17 +86,26 @@ func (h *WSHandler) PublishLocation(w http.ResponseWriter, r *http.Request) {
 // DriverLocations returns a snapshot of all active driver positions for a tenant.
 // GET /api/v1/track/drivers
 func (h *WSHandler) DriverLocations(w http.ResponseWriter, r *http.Request) {
-	// Return subscriber count as a health indicator
-	h.mu.RLock()
-	activeStreams := 0
-	for _, subs := range h.subscribers {
-		activeStreams += len(subs)
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		response.Error(w, http.StatusBadRequest, "missing X-Tenant-ID header")
+		return
 	}
-	h.mu.RUnlock()
+
+	locations, err := h.fleetSvc.GetActiveLocations(r.Context(), tenantID)
+	if err != nil {
+		log.Printf("[WS] failed to get driver locations: %v", err)
+		response.Error(w, http.StatusInternalServerError, "failed to get driver locations")
+		return
+	}
+	if locations == nil {
+		locations = []domain.DriverLocation{}
+	}
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"active_streams": activeStreams,
-		"timestamp":      time.Now(),
+		"drivers":   locations,
+		"count":     len(locations),
+		"timestamp": time.Now(),
 	})
 }
 

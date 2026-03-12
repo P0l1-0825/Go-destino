@@ -124,6 +124,10 @@ func (s *FleetService) FindNearbyDrivers(ctx context.Context, tenantID string, r
 	return nearby, nil
 }
 
+func (s *FleetService) GetActiveLocations(ctx context.Context, tenantID string) ([]domain.DriverLocation, error) {
+	return s.driverRepo.GetActiveLocations(ctx, tenantID)
+}
+
 func (s *FleetService) GetVehicle(ctx context.Context, id string) (*domain.Vehicle, error) {
 	return s.vehicleRepo.GetByID(ctx, id)
 }

@@ -108,3 +108,37 @@ func (h *ShiftHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, shifts)
 }
+
+func (h *ShiftHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	shift, err := h.shiftSvc.GetShiftByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "shift not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, shift)
+}
+
+func (h *ShiftHandler) ListByKiosk(w http.ResponseWriter, r *http.Request) {
+	kioskID := r.PathValue("kioskId")
+	if kioskID == "" {
+		response.Error(w, http.StatusBadRequest, "kioskId is required")
+		return
+	}
+	limit := 30
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+	shifts, err := h.shiftSvc.ListByKiosk(r.Context(), kioskID, limit)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, shifts)
+}

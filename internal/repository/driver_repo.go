@@ -62,9 +62,30 @@ func (r *DriverRepository) GetByUserID(ctx context.Context, userID string) (*dom
 }
 
 func (r *DriverRepository) UpdateLocation(ctx context.Context, id string, lat, lng, heading, speed float64) error {
-	query := `UPDATE drivers SET current_lat=$1, current_lng=$2, heading=$3, speed=$4, last_location_at=NOW(), updated_at=NOW() WHERE id=$5`
-	_, err := r.db.ExecContext(ctx, query, lat, lng, heading, speed, id)
-	return err
+	// Dual-write: update drivers table and upsert driver_locations
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE drivers SET current_lat=$1, current_lng=$2, heading=$3, speed=$4, last_location_at=NOW(), updated_at=NOW() WHERE id=$5`,
+		lat, lng, heading, speed, id)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO driver_locations (driver_id, lat, lng, heading, speed, updated_at)
+		VALUES ($1,$2,$3,$4,$5,NOW())
+		ON CONFLICT (driver_id) DO UPDATE SET lat=$2, lng=$3, heading=$4, speed=$5, updated_at=NOW()`,
+		id, lat, lng, heading, speed)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *DriverRepository) UpdateStatus(ctx context.Context, id string, status domain.DriverStatus) error {
@@ -109,6 +130,29 @@ func (r *DriverRepository) ListByTenant(ctx context.Context, tenantID string) ([
 		drivers = append(drivers, d)
 	}
 	return drivers, rows.Err()
+}
+
+func (r *DriverRepository) GetActiveLocations(ctx context.Context, tenantID string) ([]domain.DriverLocation, error) {
+	query := `SELECT d.id, dl.lat, dl.lng, dl.heading, dl.speed, EXTRACT(EPOCH FROM dl.updated_at)::BIGINT
+		FROM driver_locations dl
+		JOIN drivers d ON d.id = dl.driver_id
+		WHERE d.tenant_id = $1 AND d.status IN ('available','busy','on_trip')
+		ORDER BY dl.updated_at DESC`
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var locs []domain.DriverLocation
+	for rows.Next() {
+		var loc domain.DriverLocation
+		if err := rows.Scan(&loc.DriverID, &loc.Lat, &loc.Lng, &loc.Heading, &loc.Speed, &loc.Timestamp); err != nil {
+			return nil, err
+		}
+		locs = append(locs, loc)
+	}
+	return locs, rows.Err()
 }
 
 func (r *DriverRepository) ListByCompany(ctx context.Context, companyID string) ([]domain.Driver, error) {

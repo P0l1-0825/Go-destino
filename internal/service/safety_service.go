@@ -80,3 +80,34 @@ func (s *SafetyService) ResolveSOS(ctx context.Context, id string) error {
 		`UPDATE sos_alerts SET status = 'resolved', resolved_at = NOW() WHERE id = $1`, id)
 	return err
 }
+
+func (s *SafetyService) ListIncidents(ctx context.Context, tenantID string, limit, offset int) ([]domain.SafetyIncident, error) {
+	query := `SELECT id, tenant_id, booking_id, reporter_id, incident_type, severity, description, lat, lng, status, created_at
+		FROM safety_incidents WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	rows, err := s.db.QueryContext(ctx, query, tenantID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var incidents []domain.SafetyIncident
+	for rows.Next() {
+		var i domain.SafetyIncident
+		if err := rows.Scan(&i.ID, &i.TenantID, &i.BookingID, &i.ReportedBy, &i.Type, &i.Severity, &i.Description, &i.Lat, &i.Lng, &i.Status, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		incidents = append(incidents, i)
+	}
+	return incidents, rows.Err()
+}
+
+func (s *SafetyService) GetIncident(ctx context.Context, id string) (*domain.SafetyIncident, error) {
+	i := &domain.SafetyIncident{}
+	query := `SELECT id, tenant_id, booking_id, reporter_id, incident_type, severity, description, lat, lng, status, created_at
+		FROM safety_incidents WHERE id = $1`
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&i.ID, &i.TenantID, &i.BookingID, &i.ReportedBy, &i.Type, &i.Severity, &i.Description, &i.Lat, &i.Lng, &i.Status, &i.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
+}

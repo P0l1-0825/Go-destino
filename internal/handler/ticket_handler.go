@@ -68,3 +68,16 @@ func (h *TicketHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, ticket)
 }
+
+func (h *TicketHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	if err := h.ticketSvc.CancelTicket(r.Context(), id); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}

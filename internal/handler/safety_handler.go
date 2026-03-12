@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
@@ -63,6 +64,42 @@ func (h *SafetyHandler) ResolveSOS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]string{"status": "resolved"})
+}
+
+func (h *SafetyHandler) ListIncidents(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	incidents, err := h.safetySvc.ListIncidents(r.Context(), tenantID, limit, offset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, incidents)
+}
+
+func (h *SafetyHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	incident, err := h.safetySvc.GetIncident(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "incident not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, incident)
 }
 
 func (h *SafetyHandler) GetEmergencyNumbers(w http.ResponseWriter, r *http.Request) {

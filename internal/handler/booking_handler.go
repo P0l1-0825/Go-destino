@@ -60,13 +60,14 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")
 	if id == "" {
 		response.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
 
-	booking, err := h.bookingSvc.GetByID(r.Context(), id)
+	booking, err := h.bookingSvc.GetByIDTenant(r.Context(), id, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "booking not found")
 		return
@@ -75,13 +76,14 @@ func (h *BookingHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) GetByNumber(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantID(r.Context())
 	number := r.PathValue("number")
 	if number == "" {
 		response.Error(w, http.StatusBadRequest, "booking number is required")
 		return
 	}
 
-	booking, err := h.bookingSvc.GetByNumber(r.Context(), number)
+	booking, err := h.bookingSvc.GetByNumberTenant(r.Context(), number, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "booking not found")
 		return
@@ -191,6 +193,24 @@ func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
 		"limit":    limit,
 		"offset":   offset,
 	})
+}
+
+func (h *BookingHandler) StartTrip(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		response.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	if err := h.bookingSvc.StartTrip(r.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "invalid transition") || strings.Contains(err.Error(), "cannot transition") {
+			response.Error(w, http.StatusConflict, err.Error())
+			return
+		}
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
 func (h *BookingHandler) Estimate(w http.ResponseWriter, r *http.Request) {

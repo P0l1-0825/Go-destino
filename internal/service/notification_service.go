@@ -305,6 +305,16 @@ func (s *NotificationService) GetUserNotifications(ctx context.Context, userID s
 	return s.notifRepo.ListByUser(ctx, userID, limit)
 }
 
+// MarkRead marks a single notification as read.
+func (s *NotificationService) MarkRead(ctx context.Context, id string) error {
+	return s.notifRepo.MarkRead(ctx, id)
+}
+
+// MarkAllRead marks all unread notifications for a user as read.
+func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) error {
+	return s.notifRepo.MarkAllRead(ctx, userID)
+}
+
 // --- Internal delivery helpers ---
 
 func (s *NotificationService) sendEmailTemplate(ctx context.Context, tenantID, userID string, renderFn func() (string, string, error)) {

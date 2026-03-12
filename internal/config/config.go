@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -70,9 +71,15 @@ func (d DatabaseConfig) DSN() string {
 }
 
 func Load() *Config {
-	return &Config{
+	// Railway sets PORT, Docker Compose uses SERVER_PORT
+	port := getEnv("PORT", "")
+	if port == "" {
+		port = getEnv("SERVER_PORT", "8080")
+	}
+
+	cfg := &Config{
 		Server: ServerConfig{
-			Port: getEnv("SERVER_PORT", "8080"),
+			Port: port,
 			Env:  getEnv("APP_ENV", "development"),
 		},
 		Database: DatabaseConfig{
@@ -110,6 +117,83 @@ func Load() *Config {
 		},
 		CORSOrigins: getEnvList("CORS_ORIGINS"),
 	}
+
+	// Railway / managed-DB support: parse DATABASE_URL if provided
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		if parsed, err := parseDatabaseURL(dbURL); err == nil {
+			cfg.Database = parsed
+		}
+	}
+
+	// Railway / managed-Redis support: parse REDIS_URL if provided
+	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+		if parsed, err := parseRedisURL(redisURL); err == nil {
+			cfg.Redis = parsed
+		}
+	}
+
+	return cfg
+}
+
+// parseDatabaseURL parses a PostgreSQL connection string like:
+// postgresql://user:pass@host:port/dbname?sslmode=require
+func parseDatabaseURL(rawURL string) (DatabaseConfig, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return DatabaseConfig{}, fmt.Errorf("invalid DATABASE_URL: %w", err)
+	}
+
+	password, _ := u.User.Password()
+	port := u.Port()
+	if port == "" {
+		port = "5432"
+	}
+	dbName := strings.TrimPrefix(u.Path, "/")
+	sslMode := u.Query().Get("sslmode")
+	if sslMode == "" {
+		sslMode = "require" // safe default for managed DBs
+	}
+
+	return DatabaseConfig{
+		Host:     u.Hostname(),
+		Port:     port,
+		User:     u.User.Username(),
+		Password: password,
+		Name:     dbName,
+		SSLMode:  sslMode,
+	}, nil
+}
+
+// parseRedisURL parses a Redis connection string like:
+// redis://:password@host:port or redis://default:password@host:port
+func parseRedisURL(rawURL string) (RedisConfig, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return RedisConfig{}, fmt.Errorf("invalid REDIS_URL: %w", err)
+	}
+
+	password, _ := u.User.Password()
+	// Some providers put the password as the username (redis://:pass@host)
+	if password == "" {
+		password = u.User.Username()
+	}
+	port := u.Port()
+	if port == "" {
+		port = "6379"
+	}
+	db := 0
+	if dbStr := strings.TrimPrefix(u.Path, "/"); dbStr != "" {
+		if i, err := strconv.Atoi(dbStr); err == nil {
+			db = i
+		}
+	}
+
+	return RedisConfig{
+		Host:     u.Hostname(),
+		Port:     port,
+		Password: password,
+		DB:       db,
+	}, nil
 }
 
 func getEnv(key, fallback string) string {

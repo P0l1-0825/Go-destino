@@ -12,9 +12,12 @@ import (
 	"github.com/P0l1-0825/Go-destino/internal/config"
 	"github.com/P0l1-0825/Go-destino/internal/handler"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
+	"github.com/P0l1-0825/Go-destino/internal/migrate"
 	"github.com/P0l1-0825/Go-destino/internal/repository"
 	"github.com/P0l1-0825/Go-destino/internal/router"
+	"github.com/P0l1-0825/Go-destino/internal/security"
 	"github.com/P0l1-0825/Go-destino/internal/service"
+	"github.com/P0l1-0825/Go-destino/pkg/redisclient"
 )
 
 func main() {
@@ -26,6 +29,25 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Run migrations (idempotent — safe to run on every startup)
+	if err := migrate.Run(db, os.DirFS("migrations")); err != nil {
+		log.Printf("WARNING: Migration failed: %v (continuing — tables may already exist via docker-entrypoint)", err)
+	}
+
+	// Redis (graceful fallback — in-memory security components if unavailable)
+	redisClient, err := redisclient.New(cfg.Redis)
+	if err != nil {
+		log.Printf("WARNING: Redis unavailable (%v) — using in-memory security components", err)
+	} else {
+		log.Printf("Redis connected at %s", redisClient.Addr())
+	}
+	_ = redisClient // available for future Redis-backed features
+
+	// Security components (in-memory — upgrade to Redis-backed when interfaces are extracted)
+	tokenBlacklist := security.NewTokenBlacklist()
+	loginLimiter := security.NewLoginLimiter(5, 15*time.Minute, 30*time.Minute)
+	resetStore := security.NewPasswordResetStore()
 
 	// Repositories
 	userRepo := repository.NewUserRepository(db)
@@ -52,9 +74,9 @@ func main() {
 	authSvc := service.NewAuthServiceFull(service.AuthServiceConfig{
 		UserRepo:       userRepo,
 		JWTCfg:         cfg.JWT,
-		TokenBlacklist: nil,
-		LoginLimiter:   nil,
-		ResetStore:     nil,
+		TokenBlacklist: tokenBlacklist,
+		LoginLimiter:   loginLimiter,
+		ResetStore:     resetStore,
 		AuditFn: func(tenantID, userID, action, resource, resourceID, details, ip, ua string) {
 			auditSvc.Log(context.Background(), tenantID, userID, action, resource, resourceID, details, ip, ua)
 		},
@@ -109,6 +131,7 @@ func main() {
 	notifH := handler.NewNotificationHandler(notifSvc)
 	voucherH := handler.NewVoucherHandler(voucherSvc)
 	shiftH := handler.NewShiftHandler(shiftSvc)
+	paymentH := handler.NewPaymentHandler(paymentSvc)
 	adminH := handler.NewAdminHandler(tenantRepo, userRepo, airportRepo, auditSvc)
 	flightH := handler.NewFlightHandler(flightSvc)
 	safetyH := handler.NewSafetyHandler(safetySvc)
@@ -120,7 +143,7 @@ func main() {
 	r := router.New(
 		authSvc, authH, routeH, ticketH, bookingH, kioskH,
 		fleetH, aiH, analyticsH, notifH, voucherH, shiftH, adminH,
-		flightH, safetyH, wsH, kioskUXH, kioskMonH,
+		flightH, safetyH, wsH, kioskUXH, kioskMonH, paymentH,
 		corsCfg,
 	)
 
@@ -136,7 +159,7 @@ func main() {
 
 	go func() {
 		log.Printf("GoDestino API starting on %s [env=%s]", addr, cfg.Server.Env)
-		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, kiosk-monitor, fleet, ai, analytics, notifications, vouchers, shifts, admin, flights, safety, tracking")
+		log.Printf("Modules: auth, routes, tickets, bookings, kiosks, kiosk-ux, kiosk-monitor, fleet, ai, analytics, notifications, payments, vouchers, shifts, admin, flights, safety, tracking")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

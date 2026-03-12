@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
@@ -182,8 +183,8 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 		"message": "check your email for the password reset link",
 	}
 
-	// In development, include the token for testing
-	if token != "" {
+	// Only expose token in development for testing — NEVER in production
+	if token != "" && os.Getenv("APP_ENV") == "development" {
 		resp["reset_token"] = token
 	}
 
