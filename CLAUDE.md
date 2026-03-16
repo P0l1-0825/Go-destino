@@ -122,3 +122,60 @@ See docker-compose.yml. Key vars:
 - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 - REDIS_HOST, REDIS_PORT
 - JWT_SECRET, JWT_EXPIRE_HOURS
+
+## PoliAgents — Sistema de agentes
+
+GoDestino tiene 14 agentes especializados + 7 slash commands + 3 hooks de seguridad.
+
+### 8 PoliAgents (Opus 4.6)
+
+| Agente | Archivo | Funcion |
+|--------|---------|---------|
+| PoliOrch | `.claude/agents/agent-poliorch.md` | Orquestador: descompone epics, coordina agentes |
+| PoliCode | `.claude/agents/agent-policode.md` | Genera codigo Go, Next.js, React Native |
+| PoliSec | `.claude/agents/agent-polisec.md` | Auditoria OWASP, JWT, tenant isolation |
+| PoliTest | `.claude/agents/agent-politest.md` | Tests Go table-driven, Jest frontend |
+| PoliDeploy | `.claude/agents/agent-polideploy.md` | Railway deploy, Docker, Cloudflare Workers |
+| PoliMonitor | `.claude/agents/agent-polimonitor.md` | Health checks, logs, alertas |
+| PoliDocs | `.claude/agents/agent-polidocs.md` | CLAUDE.md, README, API docs |
+| PoliEdge | `.claude/agents/agent-poliedge.md` | Cloudflare Workers, R2, KV, WAF |
+
+### 6 Agentes especialistas
+
+| Agente | Archivo | Funcion |
+|--------|---------|---------|
+| Go Developer | `.claude/agents/go-developer.md` | Go 1.24 standard lib, raw SQL, multi-tenant |
+| Redis Specialist | `.claude/agents/redis-specialist.md` | go-redis/v9, blacklist, rate limiting |
+| Security Auditor | `.claude/agents/security-auditor.md` | OWASP Top 10 para Go backend |
+| Code Reviewer | `.claude/agents/code-reviewer.md` | Review PRs, convenciones, seguridad |
+| Debugger | `.claude/agents/debugger.md` | Root cause analysis, fix bugs |
+| Test Generator | `.claude/agents/test-generator.md` | Tests Go table-driven, httptest |
+
+### 7 Slash Commands
+
+| Comando | Descripcion |
+|---------|-------------|
+| `/security-audit` | Auditoria de seguridad OWASP completa |
+| `/generate-tests` | Genera suite de tests Go para modulo |
+| `/new-module` | Genera modulo Go completo (domain→handler) |
+| `/check-deploy` | Verifica salud de todos los servicios |
+| `/check-tenant-isolation` | Verifica tenant_id en todas las queries |
+| `/secrets-scanner` | Escanea codebase por secretos expuestos |
+| `/test-infrastructure` | Prueba integral de toda la infraestructura |
+
+### 3 Hooks de seguridad
+
+| Hook | Tipo | Trigger | Funcion |
+|------|------|---------|---------|
+| `secret-scanner.py` | BLOCKING | PreToolUse:Bash (git commit) | Detecta 50+ tipos de secrets |
+| `dangerous-command-blocker.py` | BLOCKING | PreToolUse:Bash | Bloquea rm -rf, dd, mkfs, etc. |
+| `tenant-guard.sh` | WARNING | PreToolUse:Edit/Write | Alerta si SQL en repo sin tenant_id |
+
+### Deployment URLs
+
+| Servicio | URL |
+|----------|-----|
+| API Backend | https://godestino-api-production.up.railway.app |
+| Admin Dashboard | https://godestino-admin.direccion-2ac.workers.dev |
+| Kiosk | https://godestino-kiosk.direccion-2ac.workers.dev |
+| Driver | https://godestino-driver.direccion-2ac.workers.dev |

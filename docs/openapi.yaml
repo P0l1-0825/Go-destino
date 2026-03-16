@@ -1,0 +1,1347 @@
+openapi: 3.1.0
+info:
+  title: GoDestino API
+  description: SaaS airport transport platform — multi-tenant API for LATAM
+  version: 1.0.0
+  contact:
+    name: GoDestino Team
+
+servers:
+  - url: https://godestino-api-production.up.railway.app
+    description: Production
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantID:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PathID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    APIResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    Meta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total_count:
+          type: integer
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          type: object
+    CreateUserRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [SUPER_ADMIN, ADMINISTRADOR, CLIENTE_CONCESION, TESORERIA_CLIENTE, MESA_CONTROL, OPERADOR, TAXISTA, VENDEDOR, BROKER, USUARIO]
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      security: []
+      responses:
+        "200":
+          description: Service healthy
+
+  /ready:
+    get:
+      summary: Readiness probe
+      tags: [System]
+      security: []
+      responses:
+        "200":
+          description: Service ready
+
+  # ── Auth (public) ──────────────────────────
+  /api/v1/auth/register:
+    post:
+      summary: Register new user
+      tags: [Auth]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: Validation error
+        "409":
+          description: Email already registered
+
+  /api/v1/auth/login:
+    post:
+      summary: Login
+      tags: [Auth]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Account locked
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh JWT token
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Token refreshed
+        "401":
+          description: Invalid refresh token
+
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Request password reset
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Reset link sent (always returns success)
+
+  /api/v1/auth/reset-password:
+    post:
+      summary: Reset password with token
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password reset
+        "400":
+          description: Invalid or expired token
+
+  # ── Auth (protected) ──────────────────────
+  /api/v1/auth/me:
+    get:
+      summary: Get current user info
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current user claims
+
+  /api/v1/auth/change-password:
+    post:
+      summary: Change password
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password changed
+
+  /api/v1/auth/logout:
+    post:
+      summary: Logout (blacklist token)
+      tags: [Auth]
+      responses:
+        "200":
+          description: Logged out
+
+  # ── Routes ─────────────────────────────────
+  /api/v1/routes:
+    post:
+      summary: Create route
+      tags: [Routes]
+      responses:
+        "201":
+          description: Route created
+    get:
+      summary: List routes
+      tags: [Routes]
+      responses:
+        "200":
+          description: Route list
+
+  /api/v1/routes/{id}:
+    get:
+      summary: Get route by ID
+      tags: [Routes]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Route details
+    put:
+      summary: Update route
+      tags: [Routes]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Route updated
+    delete:
+      summary: Delete route
+      tags: [Routes]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Route deleted
+
+  # ── Tickets ────────────────────────────────
+  /api/v1/tickets/purchase:
+    post:
+      summary: Purchase ticket (kiosk)
+      tags: [Tickets]
+      responses:
+        "201":
+          description: Ticket purchased
+
+  /api/v1/tickets/validate:
+    post:
+      summary: Validate ticket
+      tags: [Tickets]
+      responses:
+        "200":
+          description: Ticket validation result
+
+  /api/v1/tickets/{id}:
+    get:
+      summary: Get ticket by ID
+      tags: [Tickets]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Ticket details
+
+  /api/v1/tickets/{id}/cancel:
+    put:
+      summary: Cancel ticket
+      tags: [Tickets]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Ticket cancelled
+
+  # ── Bookings ───────────────────────────────
+  /api/v1/bookings:
+    post:
+      summary: Create booking
+      tags: [Bookings]
+      responses:
+        "201":
+          description: Booking created
+    get:
+      summary: List bookings
+      tags: [Bookings]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking list
+
+  /api/v1/bookings/{id}:
+    get:
+      summary: Get booking by ID
+      tags: [Bookings]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Booking details
+
+  /api/v1/bookings/number/{number}:
+    get:
+      summary: Get booking by number
+      tags: [Bookings]
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booking details
+
+  /api/v1/bookings/{id}/cancel:
+    post:
+      summary: Cancel booking
+      tags: [Bookings]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Booking cancelled
+
+  /api/v1/bookings/{id}/status:
+    put:
+      summary: Update booking status
+      tags: [Bookings]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Status updated
+
+  /api/v1/bookings/{id}/assign:
+    post:
+      summary: Assign driver to booking
+      tags: [Bookings]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Driver assigned
+
+  /api/v1/bookings/estimate:
+    post:
+      summary: Get price estimate
+      tags: [Bookings]
+      responses:
+        "200":
+          description: Price estimate
+
+  /api/v1/bookings/{id}/start:
+    put:
+      summary: Start trip
+      tags: [Bookings]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Trip started
+
+  # ── Kiosks ─────────────────────────────────
+  /api/v1/kiosks/register:
+    post:
+      summary: Register kiosk device
+      tags: [Kiosks]
+      responses:
+        "201":
+          description: Kiosk registered
+
+  /api/v1/kiosks:
+    get:
+      summary: List kiosks
+      tags: [Kiosks]
+      responses:
+        "200":
+          description: Kiosk list
+
+  /api/v1/kiosks/{id}:
+    get:
+      summary: Get kiosk by ID
+      tags: [Kiosks]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Kiosk details
+
+  /api/v1/kiosks/{id}/heartbeat:
+    put:
+      summary: Kiosk heartbeat
+      tags: [Kiosks]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Heartbeat recorded
+
+  /api/v1/kiosks/{id}/status:
+    put:
+      summary: Update kiosk status
+      tags: [Kiosks]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Status updated
+
+  # ── Kiosk UX ───────────────────────────────
+  /api/v1/kiosk/suggestions:
+    get:
+      summary: Get AI-powered booking suggestions
+      tags: [Kiosk UX]
+      responses:
+        "200":
+          description: Suggestions list
+
+  /api/v1/kiosk/flights/{number}:
+    get:
+      summary: Flight lookup for kiosk
+      tags: [Kiosk UX]
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Flight info
+
+  /api/v1/kiosk/recommend:
+    post:
+      summary: Recommend service type
+      tags: [Kiosk UX]
+      responses:
+        "200":
+          description: Recommendation
+
+  /api/v1/kiosk/quick-book:
+    post:
+      summary: Quick booking (kiosk)
+      tags: [Kiosk UX]
+      responses:
+        "201":
+          description: Booking created
+
+  /api/v1/kiosk/estimate:
+    post:
+      summary: Price estimate (kiosk)
+      tags: [Kiosk UX]
+      responses:
+        "200":
+          description: Estimate
+
+  /api/v1/kiosk/receipts/{bookingId}:
+    get:
+      summary: Get receipt for printing
+      tags: [Kiosk UX]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipt data
+
+  /api/v1/kiosk/sessions:
+    post:
+      summary: Start kiosk session
+      tags: [Kiosk UX]
+      responses:
+        "201":
+          description: Session started
+
+  /api/v1/kiosk/sessions/{id}/end:
+    put:
+      summary: End kiosk session
+      tags: [Kiosk UX]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Session ended
+
+  /api/v1/kiosk/cards/{number}/balance:
+    get:
+      summary: Get prepaid card balance
+      tags: [Kiosk UX]
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Card balance
+
+  /api/v1/kiosk/cards/recharge:
+    post:
+      summary: Recharge prepaid card
+      tags: [Kiosk UX]
+      responses:
+        "200":
+          description: Card recharged
+
+  /api/v1/kiosk/cards/issue:
+    post:
+      summary: Issue new prepaid card
+      tags: [Kiosk UX]
+      responses:
+        "201":
+          description: Card issued
+
+  # ── Kiosk Monitor ──────────────────────────
+  /api/v1/monitor/dashboard:
+    get:
+      summary: Fleet monitoring dashboard
+      tags: [Monitor]
+      responses:
+        "200":
+          description: Dashboard data
+
+  /api/v1/monitor/kiosks/{id}/heartbeat:
+    put:
+      summary: Full kiosk heartbeat with telemetry
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Heartbeat recorded
+
+  /api/v1/monitor/kiosks/{id}/diagnostics:
+    get:
+      summary: Kiosk diagnostics
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Diagnostics data
+
+  /api/v1/monitor/kiosks/{id}/telemetry:
+    get:
+      summary: Kiosk telemetry history
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Telemetry history
+
+  /api/v1/monitor/kiosks/{id}/events:
+    get:
+      summary: Kiosk events
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Events list
+
+  /api/v1/monitor/kiosks/{id}/commands:
+    post:
+      summary: Send remote command to kiosk
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Command sent
+    get:
+      summary: Command history for kiosk
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Command history
+
+  /api/v1/monitor/alerts:
+    get:
+      summary: List active alerts
+      tags: [Monitor]
+      responses:
+        "200":
+          description: Alerts list
+
+  /api/v1/monitor/alerts/{id}/ack:
+    put:
+      summary: Acknowledge alert
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Alert acknowledged
+
+  /api/v1/monitor/alerts/{id}/resolve:
+    put:
+      summary: Resolve alert
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Alert resolved
+
+  /api/v1/monitor/events:
+    get:
+      summary: Events by tenant
+      tags: [Monitor]
+      responses:
+        "200":
+          description: Events list
+
+  /api/v1/monitor/commands/{id}/result:
+    put:
+      summary: Report command execution result
+      tags: [Monitor]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Result recorded
+
+  /api/v1/monitor/stream:
+    get:
+      summary: SSE stream for real-time monitoring
+      tags: [Monitor]
+      responses:
+        "200":
+          description: SSE stream
+
+  # ── Fleet ──────────────────────────────────
+  /api/v1/fleet/drivers:
+    post:
+      summary: Register driver
+      tags: [Fleet]
+      responses:
+        "201":
+          description: Driver registered
+    get:
+      summary: List drivers
+      tags: [Fleet]
+      responses:
+        "200":
+          description: Driver list
+
+  /api/v1/fleet/drivers/{id}:
+    get:
+      summary: Get driver by ID
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Driver details
+
+  /api/v1/fleet/drivers/{id}/status:
+    put:
+      summary: Update driver status
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Status updated
+
+  /api/v1/fleet/drivers/{id}/location:
+    put:
+      summary: Update driver location
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Location updated
+
+  /api/v1/fleet/drivers/{id}/rate:
+    post:
+      summary: Rate driver
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Rating recorded
+
+  /api/v1/fleet/drivers/{id}/verify:
+    put:
+      summary: Verify driver documents
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Docs verified
+
+  /api/v1/fleet/drivers/nearby:
+    post:
+      summary: Find nearby drivers
+      tags: [Fleet]
+      responses:
+        "200":
+          description: Nearby drivers
+
+  /api/v1/fleet/vehicles:
+    post:
+      summary: Register vehicle
+      tags: [Fleet]
+      responses:
+        "201":
+          description: Vehicle registered
+    get:
+      summary: List vehicles
+      tags: [Fleet]
+      responses:
+        "200":
+          description: Vehicle list
+
+  /api/v1/fleet/vehicles/{id}:
+    get:
+      summary: Get vehicle by ID
+      tags: [Fleet]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Vehicle details
+
+  # ── AI ─────────────────────────────────────
+  /api/v1/ai/demand:
+    get:
+      summary: Demand forecast
+      tags: [AI]
+      responses:
+        "200":
+          description: Forecast data
+
+  /api/v1/ai/pricing:
+    post:
+      summary: Dynamic pricing
+      tags: [AI]
+      responses:
+        "200":
+          description: Pricing result
+
+  /api/v1/ai/fraud:
+    post:
+      summary: Fraud check
+      tags: [AI]
+      responses:
+        "200":
+          description: Fraud analysis
+
+  /api/v1/ai/chat:
+    post:
+      summary: AI chat assistant
+      tags: [AI]
+      responses:
+        "200":
+          description: Chat response
+
+  /api/v1/ai/biometric:
+    post:
+      summary: Biometric verification
+      tags: [AI]
+      responses:
+        "200":
+          description: Verification result
+
+  /api/v1/ai/optimize-routes:
+    post:
+      summary: Optimize routes
+      tags: [AI]
+      responses:
+        "200":
+          description: Optimized routes
+
+  # ── Analytics ──────────────────────────────
+  /api/v1/analytics/dashboard:
+    get:
+      summary: KPI dashboard
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Dashboard KPIs
+
+  /api/v1/analytics/revenue:
+    get:
+      summary: Revenue report
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Revenue data
+
+  /api/v1/analytics/funnel:
+    get:
+      summary: Booking funnel
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Funnel data
+
+  /api/v1/analytics/slo:
+    get:
+      summary: SLO metrics
+      tags: [Analytics]
+      responses:
+        "200":
+          description: SLO data
+
+  # ── Payments ───────────────────────────────
+  /api/v1/payments:
+    get:
+      summary: List payments
+      tags: [Payments]
+      responses:
+        "200":
+          description: Payment list
+
+  /api/v1/payments/{id}:
+    get:
+      summary: Get payment by ID
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Payment details
+
+  /api/v1/payments/booking/{bookingId}:
+    get:
+      summary: Get payment by booking ID
+      tags: [Payments]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment details
+
+  /api/v1/payments/{id}/refund:
+    post:
+      summary: Refund payment
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Payment refunded
+
+  # ── Notifications ──────────────────────────
+  /api/v1/notifications:
+    post:
+      summary: Send notification
+      tags: [Notifications]
+      responses:
+        "201":
+          description: Notification sent
+
+  /api/v1/notifications/user/{id}:
+    get:
+      summary: Get user notifications
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Notification list
+
+  /api/v1/notifications/{id}/read:
+    put:
+      summary: Mark notification as read
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Marked as read
+
+  /api/v1/notifications/read-all:
+    put:
+      summary: Mark all notifications as read
+      tags: [Notifications]
+      responses:
+        "200":
+          description: All marked as read
+
+  # ── Vouchers ───────────────────────────────
+  /api/v1/vouchers:
+    post:
+      summary: Create voucher
+      tags: [Vouchers]
+      responses:
+        "201":
+          description: Voucher created
+    get:
+      summary: List vouchers
+      tags: [Vouchers]
+      responses:
+        "200":
+          description: Voucher list
+
+  /api/v1/vouchers/redeem:
+    post:
+      summary: Redeem voucher
+      tags: [Vouchers]
+      responses:
+        "200":
+          description: Voucher redeemed
+
+  /api/v1/vouchers/{id}:
+    get:
+      summary: Get voucher by ID
+      tags: [Vouchers]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Voucher details
+
+  /api/v1/vouchers/code/{code}:
+    get:
+      summary: Get voucher by code
+      tags: [Vouchers]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Voucher details
+
+  # ── Shifts ─────────────────────────────────
+  /api/v1/shifts:
+    post:
+      summary: Open shift
+      tags: [Shifts]
+      responses:
+        "201":
+          description: Shift opened
+    get:
+      summary: List shifts
+      tags: [Shifts]
+      responses:
+        "200":
+          description: Shift list
+
+  /api/v1/shifts/{id}/close:
+    put:
+      summary: Close shift
+      tags: [Shifts]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Shift closed
+
+  /api/v1/shifts/active:
+    get:
+      summary: Get active shift
+      tags: [Shifts]
+      responses:
+        "200":
+          description: Active shift
+
+  /api/v1/shifts/{id}:
+    get:
+      summary: Get shift by ID
+      tags: [Shifts]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Shift details
+
+  /api/v1/shifts/kiosk/{kioskId}:
+    get:
+      summary: List shifts by kiosk
+      tags: [Shifts]
+      parameters:
+        - name: kioskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Shift list
+
+  # ── Flights ────────────────────────────────
+  /api/v1/flights/{number}:
+    get:
+      summary: Get flight status
+      tags: [Flights]
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Flight status
+
+  /api/v1/flights/arrivals/{code}:
+    get:
+      summary: List arrivals by airport code
+      tags: [Flights]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Arrivals list
+
+  /api/v1/flights/irops:
+    post:
+      summary: Report IROPS (irregular operations)
+      tags: [Flights]
+      responses:
+        "201":
+          description: IROPS reported
+
+  # ── Safety ─────────────────────────────────
+  /api/v1/safety/incidents:
+    post:
+      summary: Report safety incident
+      tags: [Safety]
+      responses:
+        "201":
+          description: Incident reported
+    get:
+      summary: List safety incidents
+      tags: [Safety]
+      responses:
+        "200":
+          description: Incident list
+
+  /api/v1/safety/incidents/{id}:
+    get:
+      summary: Get incident by ID
+      tags: [Safety]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Incident details
+
+  /api/v1/safety/sos:
+    post:
+      summary: Trigger SOS alert
+      tags: [Safety]
+      responses:
+        "201":
+          description: SOS triggered
+
+  /api/v1/safety/sos/{id}/resolve:
+    put:
+      summary: Resolve SOS alert
+      tags: [Safety]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: SOS resolved
+
+  /api/v1/safety/emergency-numbers:
+    get:
+      summary: Get emergency phone numbers
+      tags: [Safety]
+      security: []
+      responses:
+        "200":
+          description: Emergency numbers
+
+  # ── Real-time Tracking ─────────────────────
+  /api/v1/track/driver/{id}:
+    get:
+      summary: Track driver (SSE)
+      tags: [Tracking]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: SSE stream
+
+  /api/v1/track/publish:
+    post:
+      summary: Publish driver location
+      tags: [Tracking]
+      responses:
+        "200":
+          description: Location published
+
+  /api/v1/track/drivers:
+    get:
+      summary: All driver locations
+      tags: [Tracking]
+      responses:
+        "200":
+          description: Driver locations
+
+  # ── QR ─────────────────────────────────────
+  /api/v1/qr/validate:
+    post:
+      summary: Validate QR code
+      tags: [QR]
+      responses:
+        "200":
+          description: Validation result
+
+  /api/v1/qr/lookup/{code}:
+    get:
+      summary: Lookup QR code
+      tags: [QR]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: QR data
+
+  # ── Admin ──────────────────────────────────
+  /api/v1/admin/tenants:
+    post:
+      summary: Create tenant
+      tags: [Admin]
+      responses:
+        "201":
+          description: Tenant created
+    get:
+      summary: List tenants
+      tags: [Admin]
+      responses:
+        "200":
+          description: Tenant list
+
+  /api/v1/admin/tenants/{id}:
+    get:
+      summary: Get tenant by ID
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Tenant details
+
+  /api/v1/admin/users:
+    get:
+      summary: List users
+      tags: [Admin]
+      responses:
+        "200":
+          description: User list
+    post:
+      summary: Create user (admin)
+      tags: [Admin]
+      responses:
+        "201":
+          description: User created
+
+  /api/v1/admin/users/{id}:
+    get:
+      summary: Get user by ID
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: User details
+    put:
+      summary: Update user
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: User updated
+
+  /api/v1/admin/users/{id}/activate:
+    put:
+      summary: Activate user
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: User activated
+
+  /api/v1/admin/users/{id}/deactivate:
+    put:
+      summary: Deactivate user
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: User deactivated
+
+  /api/v1/admin/users/{id}/role:
+    put:
+      summary: Update user role
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Role updated
+
+  /api/v1/admin/airports:
+    post:
+      summary: Create airport
+      tags: [Admin]
+      responses:
+        "201":
+          description: Airport created
+    get:
+      summary: List airports
+      tags: [Admin]
+      responses:
+        "200":
+          description: Airport list
+
+  /api/v1/admin/airports/{id}:
+    get:
+      summary: Get airport by ID
+      tags: [Admin]
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Airport details
+
+  /api/v1/admin/audit:
+    get:
+      summary: View audit log
+      tags: [Admin]
+      responses:
+        "200":
+          description: Audit entries
+
+  /api/v1/admin/roles:
+    get:
+      summary: List roles
+      tags: [Admin]
+      responses:
+        "200":
+          description: Role list
+
+  /api/v1/admin/permissions:
+    get:
+      summary: List all permissions
+      tags: [Admin]
+      responses:
+        "200":
+          description: Permission list

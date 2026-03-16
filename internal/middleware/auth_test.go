@@ -129,3 +129,64 @@ func TestAuth_MissingHeader(t *testing.T) {
 		t.Errorf("expected 401 Unauthorized without auth header, got %d", rr.Code)
 	}
 }
+
+func TestTenantFromHeader_WithHeader(t *testing.T) {
+	var gotTenantID string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotTenantID = GetTenantID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := TenantFromHeader(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Tenant-ID", "tenant-xyz")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	if gotTenantID != "tenant-xyz" {
+		t.Errorf("tenant ID = %q, want %q", gotTenantID, "tenant-xyz")
+	}
+}
+
+func TestTenantFromHeader_MissingHeader_NoContext(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := TenantFromHeader(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when no X-Tenant-ID and no context, got %d", rr.Code)
+	}
+}
+
+func TestTenantFromHeader_FallbackToJWTContext(t *testing.T) {
+	var called bool
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := TenantFromHeader(inner)
+	// No X-Tenant-ID header, but tenant already in context (from JWT)
+	ctx := context.WithValue(context.Background(), ContextTenantID, "jwt-tenant")
+	req := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 with JWT fallback, got %d", rr.Code)
+	}
+	if !called {
+		t.Error("inner handler should have been called")
+	}
+}
