@@ -7,14 +7,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
-type KioskService struct {
-	kioskRepo *repository.KioskRepository
+type kioskRepoIface interface {
+	Create(ctx context.Context, k *domain.Kiosk) error
+	GetByID(ctx context.Context, id string) (*domain.Kiosk, error)
+	UpdateHeartbeat(ctx context.Context, id string) error
+	UpdateStatus(ctx context.Context, id string, status domain.KioskStatus) error
+	ListByTenant(ctx context.Context, tenantID string) ([]domain.Kiosk, error)
 }
 
-func NewKioskService(kioskRepo *repository.KioskRepository) *KioskService {
+type KioskService struct {
+	kioskRepo kioskRepoIface
+}
+
+func NewKioskService(kioskRepo kioskRepoIface) *KioskService {
 	return &KioskService{kioskRepo: kioskRepo}
 }
 

@@ -10,15 +10,27 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
-type VoucherService struct {
-	voucherRepo *repository.VoucherRepository
-	paymentRepo *repository.PaymentRepository
+type voucherRepoIface interface {
+	Create(ctx context.Context, v *domain.Voucher) error
+	GetByID(ctx context.Context, id string) (*domain.Voucher, error)
+	GetByCode(ctx context.Context, code string) (*domain.Voucher, error)
+	GetByCodeTenant(ctx context.Context, code, tenantID string) (*domain.Voucher, error)
+	Redeem(ctx context.Context, id, redeemedBy string) error
+	List(ctx context.Context, tenantID string, limit, offset int) ([]domain.Voucher, error)
 }
 
-func NewVoucherService(voucherRepo *repository.VoucherRepository, paymentRepo *repository.PaymentRepository) *VoucherService {
+type paymentCreator interface {
+	Create(ctx context.Context, p *domain.Payment) error
+}
+
+type VoucherService struct {
+	voucherRepo voucherRepoIface
+	paymentRepo paymentCreator
+}
+
+func NewVoucherService(voucherRepo voucherRepoIface, paymentRepo paymentCreator) *VoucherService {
 	return &VoucherService{voucherRepo: voucherRepo, paymentRepo: paymentRepo}
 }
 

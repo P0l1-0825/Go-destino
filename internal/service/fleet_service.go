@@ -8,16 +8,35 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 	"github.com/P0l1-0825/Go-destino/pkg/geo"
 )
 
-type FleetService struct {
-	driverRepo  *repository.DriverRepository
-	vehicleRepo *repository.VehicleRepository
+type driverRepoIface interface {
+	Create(ctx context.Context, d *domain.Driver) error
+	GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Driver, error)
+	GetByUserID(ctx context.Context, userID string) (*domain.Driver, error)
+	UpdateLocation(ctx context.Context, driverID, tenantID string, lat, lng, heading, speed float64) error
+	UpdateStatus(ctx context.Context, driverID, tenantID string, status domain.DriverStatus) error
+	UpdateRating(ctx context.Context, driverID, tenantID string, rating float64, totalTrips int) error
+	SetDocsVerified(ctx context.Context, driverID, tenantID string, verified bool) error
+	ListByTenant(ctx context.Context, tenantID string) ([]domain.Driver, error)
+	ListByCompany(ctx context.Context, companyID, tenantID string) ([]domain.Driver, error)
+	GetActiveLocations(ctx context.Context, tenantID string) ([]domain.DriverLocation, error)
 }
 
-func NewFleetService(driverRepo *repository.DriverRepository, vehicleRepo *repository.VehicleRepository) *FleetService {
+type vehicleRepoIface interface {
+	Create(ctx context.Context, v *domain.Vehicle) error
+	GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Vehicle, error)
+	GetByDriverIDTenant(ctx context.Context, driverID, tenantID string) (*domain.Vehicle, error)
+	ListByTenant(ctx context.Context, tenantID string) ([]domain.Vehicle, error)
+}
+
+type FleetService struct {
+	driverRepo  driverRepoIface
+	vehicleRepo vehicleRepoIface
+}
+
+func NewFleetService(driverRepo driverRepoIface, vehicleRepo vehicleRepoIface) *FleetService {
 	return &FleetService{driverRepo: driverRepo, vehicleRepo: vehicleRepo}
 }
 

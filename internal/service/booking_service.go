@@ -9,18 +9,38 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 	"github.com/P0l1-0825/Go-destino/pkg/geo"
 )
 
+// bookingRepoIface defines the subset of BookingRepository methods used by BookingService.
+type bookingRepoIface interface {
+	Create(ctx context.Context, b *domain.Booking) error
+	GetByID(ctx context.Context, id string) (*domain.Booking, error)
+	GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Booking, error)
+	GetByNumber(ctx context.Context, number string) (*domain.Booking, error)
+	GetByNumberTenant(ctx context.Context, number, tenantID string) (*domain.Booking, error)
+	UpdateStatus(ctx context.Context, id, tenantID string, status domain.BookingStatus) error
+	AssignDriver(ctx context.Context, id, tenantID, driverID, vehicleID string) error
+	SetStarted(ctx context.Context, id, tenantID string) error
+	SetCompleted(ctx context.Context, id, tenantID string) error
+	SetCancelled(ctx context.Context, id, tenantID, reason string) error
+	ListByTenant(ctx context.Context, tenantID string, limit int) ([]domain.Booking, error)
+	ListFiltered(ctx context.Context, f domain.ListBookingsFilter) ([]domain.Booking, int, error)
+}
+
+// paymentRepoForBooking defines the subset of PaymentRepository methods used by BookingService.
+type paymentRepoForBooking interface {
+	GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Payment, error)
+}
+
 type BookingService struct {
-	bookingRepo *repository.BookingRepository
-	paymentRepo *repository.PaymentRepository
+	bookingRepo bookingRepoIface
+	paymentRepo paymentRepoForBooking
 	notifSvc    *NotificationService
 	paymentSvc  *PaymentService
 }
 
-func NewBookingService(bookingRepo *repository.BookingRepository, paymentRepo *repository.PaymentRepository) *BookingService {
+func NewBookingService(bookingRepo bookingRepoIface, paymentRepo paymentRepoForBooking) *BookingService {
 	return &BookingService{bookingRepo: bookingRepo, paymentRepo: paymentRepo}
 }
 

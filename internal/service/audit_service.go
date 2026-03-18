@@ -6,14 +6,19 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
-type AuditService struct {
-	auditRepo *repository.AuditRepository
+type auditRepoIface interface {
+	Create(ctx context.Context, e *domain.AuditLogEntry) error
+	ListByTenant(ctx context.Context, tenantID string, limit int) ([]domain.AuditLogEntry, error)
+	ListByUser(ctx context.Context, userID string, limit int) ([]domain.AuditLogEntry, error)
 }
 
-func NewAuditService(auditRepo *repository.AuditRepository) *AuditService {
+type AuditService struct {
+	auditRepo auditRepoIface
+}
+
+func NewAuditService(auditRepo auditRepoIface) *AuditService {
 	return &AuditService{auditRepo: auditRepo}
 }
 

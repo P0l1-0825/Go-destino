@@ -7,14 +7,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
-type RouteService struct {
-	routeRepo *repository.RouteRepository
+type routeRepoIface interface {
+	Create(ctx context.Context, r *domain.Route) error
+	GetByID(ctx context.Context, id string) (*domain.Route, error)
+	Update(ctx context.Context, r *domain.Route) error
+	Deactivate(ctx context.Context, id, tenantID string) error
+	ListByTenant(ctx context.Context, tenantID string) ([]domain.Route, error)
+	ListByTransportType(ctx context.Context, tenantID string, t domain.TransportType) ([]domain.Route, error)
 }
 
-func NewRouteService(routeRepo *repository.RouteRepository) *RouteService {
+type RouteService struct {
+	routeRepo routeRepoIface
+}
+
+func NewRouteService(routeRepo routeRepoIface) *RouteService {
 	return &RouteService{routeRepo: routeRepo}
 }
 

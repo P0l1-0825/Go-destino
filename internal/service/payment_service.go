@@ -10,21 +10,42 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
 // PaymentService orchestrates the full payment lifecycle:
 // charge → confirm → receipt → refund with notifications at each step.
+// paymentRepoIface defines the subset of PaymentRepository methods used by PaymentService.
+type paymentRepoIface interface {
+	Create(ctx context.Context, p *domain.Payment) error
+	GetByIDTenant(ctx context.Context, id, tenantID string) (*domain.Payment, error)
+	GetByBookingIDTenant(ctx context.Context, bookingID, tenantID string) (*domain.Payment, error)
+	UpdateStatus(ctx context.Context, id, tenantID string, status domain.PaymentStatus) error
+	MarkFailed(ctx context.Context, id, tenantID, reason string) error
+	Refund(ctx context.Context, originalID, tenantID string, refundPayment *domain.Payment) error
+	ListByTenant(ctx context.Context, tenantID string, limit, offset int) ([]domain.Payment, error)
+}
+
+// auditLogger defines the subset of AuditService methods used by PaymentService.
+type auditLogger interface {
+	Log(ctx context.Context, tenantID, userID, action, resource, resourceID, details, ip, ua string)
+}
+
+// notifier defines the subset of NotificationService methods used by PaymentService.
+type notifier interface {
+	SendPaymentReceipt(ctx context.Context, tenantID, userID string, payment *domain.Payment, bookingNumber, lang string)
+	SendRefundNotification(ctx context.Context, tenantID, userID string, amountCents int64, currency, reference, reason, lang string)
+}
+
 type PaymentService struct {
-	paymentRepo *repository.PaymentRepository
-	notifSvc    *NotificationService
-	auditSvc    *AuditService
+	paymentRepo paymentRepoIface
+	notifSvc    notifier
+	auditSvc    auditLogger
 }
 
 func NewPaymentService(
-	paymentRepo *repository.PaymentRepository,
-	notifSvc *NotificationService,
-	auditSvc *AuditService,
+	paymentRepo paymentRepoIface,
+	notifSvc notifier,
+	auditSvc auditLogger,
 ) *PaymentService {
 	return &PaymentService{
 		paymentRepo: paymentRepo,

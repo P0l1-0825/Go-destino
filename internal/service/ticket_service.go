@@ -10,22 +10,38 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
 const maxTicketsPerPurchase = 20
 
+type ticketRepoIface interface {
+	Create(ctx context.Context, t *domain.Ticket) error
+	GetByID(ctx context.Context, id string) (*domain.Ticket, error)
+	GetByQRCode(ctx context.Context, qr string) (*domain.Ticket, error)
+	UpdateStatus(ctx context.Context, id string, status domain.TicketStatus) error
+}
+
+type routeReader interface {
+	GetByID(ctx context.Context, id string) (*domain.Route, error)
+}
+
+type paymentWriter interface {
+	Create(ctx context.Context, p *domain.Payment) error
+	UpdateStatus(ctx context.Context, id, tenantID string, status domain.PaymentStatus) error
+	MarkFailed(ctx context.Context, id, tenantID, reason string) error
+}
+
 type TicketService struct {
-	ticketRepo  *repository.TicketRepository
-	routeRepo   *repository.RouteRepository
-	paymentRepo *repository.PaymentRepository
+	ticketRepo  ticketRepoIface
+	routeRepo   routeReader
+	paymentRepo paymentWriter
 	notifSvc    *NotificationService
 }
 
 func NewTicketService(
-	ticketRepo *repository.TicketRepository,
-	routeRepo *repository.RouteRepository,
-	paymentRepo *repository.PaymentRepository,
+	ticketRepo ticketRepoIface,
+	routeRepo routeReader,
+	paymentRepo paymentWriter,
 ) *TicketService {
 	return &TicketService{
 		ticketRepo:  ticketRepo,

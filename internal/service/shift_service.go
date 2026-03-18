@@ -7,16 +7,24 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 )
 
 const defaultCommissionRate = 0.05 // 5% commission
 
-type ShiftService struct {
-	shiftRepo *repository.ShiftRepository
+type shiftRepoIface interface {
+	Create(ctx context.Context, s *domain.ShiftRecord) error
+	GetByID(ctx context.Context, id string) (*domain.ShiftRecord, error)
+	GetActive(ctx context.Context, sellerID string) (*domain.ShiftRecord, error)
+	Close(ctx context.Context, id string, totalSales, cashCollected, cardCollected, commissionCents int64, ticketsSold, bookingsCreated int) error
+	ListBySeller(ctx context.Context, sellerID string, limit int) ([]domain.ShiftRecord, error)
+	ListByKiosk(ctx context.Context, kioskID string, limit int) ([]domain.ShiftRecord, error)
 }
 
-func NewShiftService(shiftRepo *repository.ShiftRepository) *ShiftService {
+type ShiftService struct {
+	shiftRepo shiftRepoIface
+}
+
+func NewShiftService(shiftRepo shiftRepoIface) *ShiftService {
 	return &ShiftService{shiftRepo: shiftRepo}
 }
 

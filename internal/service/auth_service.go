@@ -12,12 +12,21 @@ import (
 
 	"github.com/P0l1-0825/Go-destino/internal/config"
 	"github.com/P0l1-0825/Go-destino/internal/domain"
-	"github.com/P0l1-0825/Go-destino/internal/repository"
 	"github.com/P0l1-0825/Go-destino/internal/security"
 )
 
+// userRepo defines the subset of UserRepository methods used by AuthService.
+type userRepo interface {
+	Create(ctx context.Context, u *domain.User) error
+	GetByID(ctx context.Context, id string) (*domain.User, error)
+	GetByEmail(ctx context.Context, tenantID, email string) (*domain.User, error)
+	ExistsByEmail(ctx context.Context, tenantID, email string) (bool, error)
+	ChangePassword(ctx context.Context, userID, newHash string) error
+	UpdateLastLogin(ctx context.Context, id string) error
+}
+
 type AuthService struct {
-	userRepo       *repository.UserRepository
+	userRepo       userRepo
 	jwtCfg         config.JWTConfig
 	loginLimiter   security.LoginLimiterStore
 	tokenBlacklist security.TokenBlacklistStore
@@ -27,7 +36,7 @@ type AuthService struct {
 }
 
 type AuthServiceConfig struct {
-	UserRepo       *repository.UserRepository
+	UserRepo       userRepo
 	JWTCfg         config.JWTConfig
 	LoginLimiter   security.LoginLimiterStore
 	TokenBlacklist security.TokenBlacklistStore
@@ -35,7 +44,7 @@ type AuthServiceConfig struct {
 	AuditFn        func(tenantID, userID, action, resource, resourceID, details, ip, ua string)
 }
 
-func NewAuthService(userRepo *repository.UserRepository, jwtCfg config.JWTConfig) *AuthService {
+func NewAuthService(userRepo userRepo, jwtCfg config.JWTConfig) *AuthService {
 	return &AuthService{
 		userRepo:       userRepo,
 		jwtCfg:         jwtCfg,
