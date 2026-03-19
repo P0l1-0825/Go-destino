@@ -103,6 +103,20 @@ const (
 	PermKioskCommissionView Permission = "kiosk.commission.view"
 )
 
+// Concesion permissions.
+const (
+	PermConcesionRead       Permission = "concesion.read"
+	PermConcesionReadOwn    Permission = "concesion.read.own"    // read own concesion only
+	PermConcesionCreate     Permission = "concesion.create"
+	PermConcesionUpdate     Permission = "concesion.update"
+	PermConcesionUpdateOwn  Permission = "concesion.update.own"  // update own concesion
+	PermConcesionDelete     Permission = "concesion.delete"
+	PermConcesionStaffRead  Permission = "concesion.staff.read"  // list staff in concesion
+	PermConcesionStaffManage Permission = "concesion.staff.manage" // assign/remove staff
+	PermConcesionVehicleRead Permission = "concesion.vehicle.read"
+	PermConcesionVehicleManage Permission = "concesion.vehicle.manage"
+)
+
 // QR validation permissions.
 const (
 	PermQRValidate Permission = "qr.validate"
@@ -132,6 +146,10 @@ func AllPermissions() []Permission {
 		PermSysSettingsView, PermSysSettingsEdit, PermSysAuditLog, PermSysAPIKeys, PermSysWebhooks,
 		PermKioskBookCreate, PermKioskPrintTicket, PermKioskOfflineSync,
 		PermKioskShiftOpen, PermKioskShiftClose, PermKioskCommissionView,
+		PermConcesionRead, PermConcesionReadOwn, PermConcesionCreate,
+		PermConcesionUpdate, PermConcesionUpdateOwn, PermConcesionDelete,
+		PermConcesionStaffRead, PermConcesionStaffManage,
+		PermConcesionVehicleRead, PermConcesionVehicleManage,
 		PermQRValidate,
 	}
 }
@@ -154,6 +172,10 @@ var RolePermissions = map[UserRole][]Permission{
 		PermSysAirportsRead, PermSysAirportsManage, PermSysKioskView,
 		PermSysKioskManage, PermSysSettingsView, PermSysAuditLog, PermSysAPIKeys,
 		PermKioskBookCreate, PermKioskOfflineSync,
+		// Concesion: admin manages all concesiones
+		PermConcesionRead, PermConcesionCreate, PermConcesionUpdate, PermConcesionDelete,
+		PermConcesionStaffRead, PermConcesionStaffManage,
+		PermConcesionVehicleRead, PermConcesionVehicleManage,
 	},
 	RoleClienteConcesion: {
 		PermResReadCompany, PermResPriceEstimate,
@@ -162,12 +184,17 @@ var RolePermissions = map[UserRole][]Permission{
 		PermFleetDriverVerify, PermFleetVehicleOwn, PermFleetVehicleAll,
 		PermAnalyticsKPICompany, PermAnalyticsReports, PermAnalyticsExport,
 		PermSysKioskView, PermSysSettingsView,
+		// Concesion: administrativo manages own concesion
+		PermConcesionReadOwn, PermConcesionUpdateOwn,
+		PermConcesionStaffRead, PermConcesionStaffManage,
+		PermConcesionVehicleRead, PermConcesionVehicleManage,
 	},
 	RoleTesoreriaCliente: {
 		PermResReadCompany,
 		PermPayReportCompany, PermPayLiquidation, PermPayInvoice,
 		PermPayExportFiscal, PermPayRefundOwn,
 		PermAnalyticsKPICompany, PermAnalyticsReports, PermAnalyticsExport,
+		PermConcesionReadOwn, // read own concesion for financial context
 	},
 	RoleMesaControl: {
 		PermResReadAirport, PermResCancelAny, PermResAssignDriver, PermResOverrideAI,
@@ -182,6 +209,7 @@ var RolePermissions = map[UserRole][]Permission{
 		PermFleetDriverRead, PermFleetDriverVerify, PermFleetLocationView, PermFleetDispatchMap,
 		PermAnalyticsKPIBasic,
 		PermSysKioskView,
+		PermConcesionReadOwn, PermConcesionStaffRead, PermConcesionVehicleRead, // operativo reads concesion
 	},
 	RoleTaxista: {
 		PermResReadOwn, PermResCancelOwn,
@@ -189,6 +217,7 @@ var RolePermissions = map[UserRole][]Permission{
 		PermAnalyticsKPIBasic,
 		PermAIChat,
 		PermQRValidate,
+		PermConcesionReadOwn, // taxista sees own concesion info
 	},
 	RoleVendedor: {
 		PermResCreateWeb, PermResReadAirport, PermResCancelOwn, PermResPriceEstimate,

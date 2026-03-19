@@ -27,7 +27,8 @@ type User struct {
 	Name         string    `json:"name" db:"name"`
 	Role         UserRole  `json:"role" db:"role"`
 	SubRole      string    `json:"sub_role,omitempty" db:"sub_role"`
-	CompanyID    string    `json:"company_id,omitempty" db:"company_id"`
+	ConcesionID  string    `json:"concesion_id,omitempty" db:"concesion_id"`
+	CompanyID    string    `json:"company_id,omitempty" db:"company_id"` // deprecated: use concesion_id
 	AirportIDs   []string  `json:"airport_ids,omitempty"`
 	Lang         string    `json:"lang" db:"lang"`
 	Active       bool      `json:"active" db:"active"`
@@ -55,8 +56,9 @@ type CreateUserRequest struct {
 	Name      string   `json:"name"`
 	Role      UserRole `json:"role"`
 	SubRole   string   `json:"sub_role,omitempty"`
-	CompanyID string   `json:"company_id,omitempty"`
-	Lang      string   `json:"lang"`
+	ConcesionID string `json:"concesion_id,omitempty"`
+	CompanyID   string `json:"company_id,omitempty"` // deprecated: use concesion_id
+	Lang        string `json:"lang"`
 }
 
 type RefreshTokenRequest struct {

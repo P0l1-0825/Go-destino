@@ -38,7 +38,8 @@ type Driver struct {
 	ID                string       `json:"id" db:"id"`
 	TenantID          string       `json:"tenant_id" db:"tenant_id"`
 	UserID            string       `json:"user_id" db:"user_id"`
-	CompanyID         string       `json:"company_id,omitempty" db:"company_id"`
+	ConcesionID       string       `json:"concesion_id,omitempty" db:"concesion_id"`
+	CompanyID         string       `json:"company_id,omitempty" db:"company_id"` // deprecated: use concesion_id
 	LicenseNumber     string       `json:"license_number" db:"license_number"`
 	Status            DriverStatus `json:"status" db:"status"`
 	SubRole           string       `json:"sub_role" db:"sub_role"` // DRIVER_TAXI, DRIVER_VAN, DRIVER_BUS, DRIVER_SHUTTLE
@@ -61,7 +62,8 @@ type Vehicle struct {
 	ID          string      `json:"id" db:"id"`
 	TenantID    string      `json:"tenant_id" db:"tenant_id"`
 	DriverID    string      `json:"driver_id" db:"driver_id"`
-	CompanyID   string      `json:"company_id,omitempty" db:"company_id"`
+	ConcesionID string      `json:"concesion_id,omitempty" db:"concesion_id"`
+	CompanyID   string      `json:"company_id,omitempty" db:"company_id"` // deprecated: use concesion_id
 	Plate       string      `json:"plate" db:"plate"`
 	Brand       string      `json:"brand" db:"brand"`
 	Model       string      `json:"model" db:"model"`
@@ -105,7 +107,8 @@ type RegisterDriverRequest struct {
 	UserID        string `json:"user_id"`
 	LicenseNumber string `json:"license_number"`
 	SubRole       string `json:"sub_role"`
-	CompanyID     string `json:"company_id,omitempty"`
+	ConcesionID   string `json:"concesion_id,omitempty"`
+	CompanyID     string `json:"company_id,omitempty"` // deprecated: use concesion_id
 }
 
 type RegisterVehicleRequest struct {

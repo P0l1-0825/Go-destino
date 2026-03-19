@@ -31,6 +31,7 @@ func New(
 	kioskMonH *handler.KioskMonitorHandler,
 	paymentH *handler.PaymentHandler,
 	qrH *handler.QRHandler,
+	concesionH *handler.ConcesionHandler,
 	corsConfig ...middleware.CORSConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -203,6 +204,16 @@ func New(
 	mux.Handle("GET /api/v1/admin/audit", applyAuthPerm(authSvc, domain.PermSysAuditLog, http.HandlerFunc(adminH.AuditLog)))
 	mux.Handle("GET /api/v1/admin/roles", applyAuthPerm(authSvc, domain.PermSysRolesAssign, http.HandlerFunc(adminH.ListRoles)))
 	mux.Handle("GET /api/v1/admin/permissions", applyAuthPerm(authSvc, domain.PermSysRolesAssign, http.HandlerFunc(adminH.ListPermissions)))
+
+	// Concesiones (franchises)
+	mux.Handle("POST /api/v1/concesiones", applyAuthPerm(authSvc, domain.PermConcesionCreate, http.HandlerFunc(concesionH.Create)))
+	mux.Handle("GET /api/v1/concesiones", applyAuthPerm(authSvc, domain.PermConcesionRead, http.HandlerFunc(concesionH.List)))
+	mux.Handle("GET /api/v1/concesiones/{id}", applyAuthPerm(authSvc, domain.PermConcesionRead, http.HandlerFunc(concesionH.GetByID)))
+	mux.Handle("PUT /api/v1/concesiones/{id}", applyAuthPerm(authSvc, domain.PermConcesionUpdate, http.HandlerFunc(concesionH.Update)))
+	mux.Handle("DELETE /api/v1/concesiones/{id}", applyAuthPerm(authSvc, domain.PermConcesionDelete, http.HandlerFunc(concesionH.Delete)))
+	mux.Handle("GET /api/v1/concesiones/{id}/staff", applyAuthPerm(authSvc, domain.PermConcesionStaffRead, http.HandlerFunc(concesionH.ListStaff)))
+	mux.Handle("POST /api/v1/concesiones/{id}/staff", applyAuthPerm(authSvc, domain.PermConcesionStaffManage, http.HandlerFunc(concesionH.AssignStaff)))
+	mux.Handle("DELETE /api/v1/concesiones/{id}/staff/{userId}", applyAuthPerm(authSvc, domain.PermConcesionStaffManage, http.HandlerFunc(concesionH.RemoveStaff)))
 
 	// Apply global middleware (order matters: outermost runs first)
 	var h http.Handler = mux

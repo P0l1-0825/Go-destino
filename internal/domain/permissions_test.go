@@ -85,6 +85,49 @@ func TestAllPermissions_Count(t *testing.T) {
 	}
 }
 
+func TestConcesionPermissions(t *testing.T) {
+	tests := []struct {
+		name string
+		role UserRole
+		perm Permission
+		want bool
+	}{
+		// Admin gets all concesion perms
+		{"admin has concesion.read", RoleAdmin, PermConcesionRead, true},
+		{"admin has concesion.create", RoleAdmin, PermConcesionCreate, true},
+		{"admin has concesion.update", RoleAdmin, PermConcesionUpdate, true},
+		{"admin has concesion.delete", RoleAdmin, PermConcesionDelete, true},
+		{"admin has concesion.staff.manage", RoleAdmin, PermConcesionStaffManage, true},
+		{"admin has concesion.vehicle.manage", RoleAdmin, PermConcesionVehicleManage, true},
+
+		// ClienteConcesion gets own-scope concesion management
+		{"cliente has concesion.read.own", RoleClienteConcesion, PermConcesionReadOwn, true},
+		{"cliente has concesion.update.own", RoleClienteConcesion, PermConcesionUpdateOwn, true},
+		{"cliente has concesion.staff.manage", RoleClienteConcesion, PermConcesionStaffManage, true},
+		{"cliente has concesion.vehicle.manage", RoleClienteConcesion, PermConcesionVehicleManage, true},
+		{"cliente lacks concesion.create", RoleClienteConcesion, PermConcesionCreate, false},
+		{"cliente lacks concesion.delete", RoleClienteConcesion, PermConcesionDelete, false},
+
+		// Taxista gets read-own only
+		{"taxista has concesion.read.own", RoleTaxista, PermConcesionReadOwn, true},
+		{"taxista lacks concesion.create", RoleTaxista, PermConcesionCreate, false},
+		{"taxista lacks concesion.staff.manage", RoleTaxista, PermConcesionStaffManage, false},
+
+		// Usuario has no concesion perms
+		{"usuario lacks concesion.read", RoleUsuario, PermConcesionRead, false},
+		{"usuario lacks concesion.read.own", RoleUsuario, PermConcesionReadOwn, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HasPermission(tt.role, tt.perm)
+			if got != tt.want {
+				t.Errorf("HasPermission(%s, %s) = %v, want %v", tt.role, tt.perm, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRolePermissions_AllRolesDefined(t *testing.T) {
 	expectedRoles := []UserRole{
 		RoleSuperAdmin, RoleAdmin, RoleClienteConcesion, RoleTesoreriaCliente,

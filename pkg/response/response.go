@@ -27,6 +27,20 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	})
 }
 
+func JSONWithMeta(w http.ResponseWriter, status int, data interface{}, total, limit, offset int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	page := 1
+	if limit > 0 {
+		page = (offset / limit) + 1
+	}
+	json.NewEncoder(w).Encode(APIResponse{
+		Success: true,
+		Data:    data,
+		Meta:    &Meta{Page: page, PerPage: limit, TotalCount: total},
+	})
+}
+
 func Error(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
