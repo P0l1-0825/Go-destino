@@ -113,6 +113,7 @@ func New(
 
 	// Fleet management
 	mux.Handle("POST /api/v1/fleet/drivers", applyAuthPerm(authSvc, domain.PermFleetDriverOnboard, http.HandlerFunc(fleetH.RegisterDriver)))
+	mux.Handle("GET /api/v1/fleet/drivers/me", applyAuthPerm(authSvc, domain.PermFleetDriverReadOwn, http.HandlerFunc(fleetH.GetMyDriver)))
 	mux.Handle("GET /api/v1/fleet/drivers", applyAuthPerm(authSvc, domain.PermFleetDriverRead, http.HandlerFunc(fleetH.ListDrivers)))
 	mux.Handle("GET /api/v1/fleet/drivers/{id}", applyAuthPerm(authSvc, domain.PermFleetDriverRead, http.HandlerFunc(fleetH.GetDriver)))
 	mux.Handle("PUT /api/v1/fleet/drivers/{id}/status", applyAuthPerm(authSvc, domain.PermFleetStatusOwn, http.HandlerFunc(fleetH.UpdateStatus)))

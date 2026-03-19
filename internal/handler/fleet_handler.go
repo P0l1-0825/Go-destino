@@ -79,6 +79,22 @@ func (h *FleetHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]string{"status": string(req.Status)})
 }
 
+// GetMyDriver returns the driver profile linked to the authenticated user.
+// Uses user_id from JWT claims — no path param needed.
+func (h *FleetHandler) GetMyDriver(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		response.Error(w, http.StatusUnauthorized, "missing user id")
+		return
+	}
+	driver, err := h.fleetSvc.GetDriverByUserID(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "driver profile not found")
+		return
+	}
+	response.JSON(w, http.StatusOK, driver)
+}
+
 func (h *FleetHandler) GetDriver(w http.ResponseWriter, r *http.Request) {
 	tenantID := middleware.GetTenantID(r.Context())
 	id := r.PathValue("id")

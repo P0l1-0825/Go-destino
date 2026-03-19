@@ -39,18 +39,19 @@ const (
 
 // Fleet permissions.
 const (
-	PermFleetLocationOwn   Permission = "fleet.location.own"
-	PermFleetLocationView  Permission = "fleet.location.view"
-	PermFleetStatusOwn     Permission = "fleet.status.own"
-	PermFleetDriverOnboard Permission = "fleet.driver.onboard"
-	PermFleetDriverRead    Permission = "fleet.driver.read"
-	PermFleetDriverManage  Permission = "fleet.driver.manage"
-	PermFleetDriverVerify  Permission = "fleet.driver.verify"
-	PermFleetDriverRate    Permission = "fleet.driver.rate"
-	PermFleetVehicleOwn    Permission = "fleet.vehicle.own"
-	PermFleetVehicleAll    Permission = "fleet.vehicle.all"
-	PermFleetDispatchMap   Permission = "fleet.dispatch.map"
-	PermFleetHeatmap       Permission = "fleet.heatmap"
+	PermFleetLocationOwn    Permission = "fleet.location.own"
+	PermFleetLocationView   Permission = "fleet.location.view"
+	PermFleetStatusOwn      Permission = "fleet.status.own"
+	PermFleetDriverOnboard  Permission = "fleet.driver.onboard"
+	PermFleetDriverRead     Permission = "fleet.driver.read"
+	PermFleetDriverReadOwn  Permission = "fleet.driver.read.own"
+	PermFleetDriverManage   Permission = "fleet.driver.manage"
+	PermFleetDriverVerify   Permission = "fleet.driver.verify"
+	PermFleetDriverRate     Permission = "fleet.driver.rate"
+	PermFleetVehicleOwn     Permission = "fleet.vehicle.own"
+	PermFleetVehicleAll     Permission = "fleet.vehicle.all"
+	PermFleetDispatchMap    Permission = "fleet.dispatch.map"
+	PermFleetHeatmap        Permission = "fleet.heatmap"
 )
 
 // Analytics permissions.
@@ -133,9 +134,9 @@ func AllPermissions() []Permission {
 		PermPayReportOwn, PermPayReportCompany, PermPayReportGlobal,
 		PermPayLiquidation, PermPayInvoice, PermPayGatewayConfig, PermPayExportFiscal,
 		PermFleetLocationOwn, PermFleetLocationView, PermFleetStatusOwn,
-		PermFleetDriverOnboard, PermFleetDriverRead, PermFleetDriverManage,
-		PermFleetDriverVerify, PermFleetDriverRate, PermFleetVehicleOwn,
-		PermFleetVehicleAll, PermFleetDispatchMap, PermFleetHeatmap,
+		PermFleetDriverOnboard, PermFleetDriverRead, PermFleetDriverReadOwn,
+		PermFleetDriverManage, PermFleetDriverVerify, PermFleetDriverRate,
+		PermFleetVehicleOwn, PermFleetVehicleAll, PermFleetDispatchMap, PermFleetHeatmap,
 		PermAnalyticsKPIBasic, PermAnalyticsKPIAirport, PermAnalyticsKPICompany,
 		PermAnalyticsKPIGlobal, PermAnalyticsReports, PermAnalyticsExport,
 		PermAnalyticsCohort, PermAnalyticsSLO,
@@ -214,6 +215,7 @@ var RolePermissions = map[UserRole][]Permission{
 	RoleTaxista: {
 		PermResReadOwn, PermResCancelOwn,
 		PermFleetLocationOwn, PermFleetStatusOwn, PermFleetVehicleOwn,
+		PermFleetDriverReadOwn, // taxista can read own driver profile via /fleet/drivers/me
 		PermAnalyticsKPIBasic,
 		PermAIChat,
 		PermQRValidate,
