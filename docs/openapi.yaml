@@ -1345,3 +1345,196 @@ paths:
       responses:
         "200":
           description: Permission list
+
+  # ── Concesiones (Franchises) ──
+
+  /api/v1/concesiones:
+    post:
+      summary: Create concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name:
+                  type: string
+                  example: "Transportes del Valle"
+                code:
+                  type: string
+                  example: "CONC-001"
+                rfc:
+                  type: string
+                  example: "TVA200101ABC"
+                type:
+                  type: string
+                  enum: [taxi, van, shuttle, mixed]
+                  default: mixed
+                phone:
+                  type: string
+                email:
+                  type: string
+                address:
+                  type: string
+                max_vehicles:
+                  type: integer
+                  default: 50
+                max_drivers:
+                  type: integer
+                  default: 50
+      responses:
+        "201":
+          description: Concesion created
+        "400":
+          description: Invalid request (name/code required)
+    get:
+      summary: List concesiones (paginated)
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, suspended, pending]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [taxi, van, shuttle, mixed]
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by name or code
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list with meta (page, per_page, total_count)
+
+  /api/v1/concesiones/{id}:
+    get:
+      summary: Get concesion by ID (with aggregated stats)
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Concesion with vehicle_count, driver_count, staff_count
+        "404":
+          description: Concesion not found
+    put:
+      summary: Update concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                email:
+                  type: string
+                address:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, inactive, suspended, pending]
+                max_vehicles:
+                  type: integer
+                max_drivers:
+                  type: integer
+                logo_url:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Updated concesion
+        "400":
+          description: Invalid request body
+    delete:
+      summary: Delete concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Concesion deleted
+
+  /api/v1/concesiones/{id}/staff:
+    get:
+      summary: List staff assigned to concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "200":
+          description: Array of users assigned to this concesion
+    post:
+      summary: Assign staff to concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, staff_role]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                staff_role:
+                  type: string
+                  enum: [administrativo, operativo, taxista]
+                  description: "administrativo auto-sets as manager"
+      responses:
+        "200":
+          description: Staff assigned
+        "400":
+          description: Invalid user_id or staff_role
+
+  /api/v1/concesiones/{id}/staff/{userId}:
+    delete:
+      summary: Remove staff from concesion
+      tags: [Concesiones]
+      parameters:
+        - $ref: "#/components/parameters/TenantID"
+        - $ref: "#/components/parameters/PathID"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Staff removed
