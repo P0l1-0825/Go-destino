@@ -46,7 +46,7 @@ func scanVehicle(row interface{ Scan(dest ...any) error }) (*domain.Vehicle, err
 
 func (r *VehicleRepository) Create(ctx context.Context, v *domain.Vehicle) error {
 	query := `INSERT INTO vehicles (id, tenant_id, driver_id, vehicle_type, make, model, year, plate, color, capacity, insurance_expiry, active, concesion_id, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),NOW(),NOW())`
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,'')::uuid,NOW(),NOW())`
 	active := v.Status != "inactive"
 	_, err := r.db.ExecContext(ctx, query,
 		v.ID, v.TenantID, v.DriverID, v.Type, v.Brand, v.Model, v.Year, v.Plate, v.Color,
