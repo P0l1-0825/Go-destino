@@ -34,6 +34,19 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, notif)
 }
 
+func (h *NotificationHandler) GetMyNotifications(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	notifs, err := h.notifSvc.GetUserNotifications(r.Context(), userID, 50)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if notifs == nil {
+		notifs = []domain.Notification{}
+	}
+	response.JSON(w, http.StatusOK, notifs)
+}
+
 func (h *NotificationHandler) GetUserNotifications(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("id")
 	notifs, err := h.notifSvc.GetUserNotifications(r.Context(), userID, 50)

@@ -147,6 +147,7 @@ func New(
 
 	// Notifications
 	mux.Handle("POST /api/v1/notifications", applyAuthPerm(authSvc, domain.PermSysUsersManage, http.HandlerFunc(notifH.Send)))
+	mux.Handle("GET /api/v1/notifications", applyAuth(authSvc, http.HandlerFunc(notifH.GetMyNotifications)))
 	mux.Handle("GET /api/v1/notifications/user/{id}", applyAuth(authSvc, http.HandlerFunc(notifH.GetUserNotifications)))
 	mux.Handle("PUT /api/v1/notifications/{id}/read", applyAuth(authSvc, http.HandlerFunc(notifH.MarkRead)))
 	mux.Handle("PUT /api/v1/notifications/read-all", applyAuth(authSvc, http.HandlerFunc(notifH.MarkAllRead)))

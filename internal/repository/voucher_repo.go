@@ -16,18 +16,18 @@ func NewVoucherRepository(db *sql.DB) *VoucherRepository {
 }
 
 func (r *VoucherRepository) Create(ctx context.Context, v *domain.Voucher) error {
-	query := `INSERT INTO vouchers (id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, expires_at, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())`
-	_, err := r.db.ExecContext(ctx, query, v.ID, v.TenantID, v.Code, v.BookingID, v.AmountCents, v.Currency, v.Status, v.QRCodeURL, v.CreatedBy, v.ExpiresAt)
+	query := `INSERT INTO vouchers (id, tenant_id, code, booking_id, amount_cents, currency, status, created_by, expires_at, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`
+	_, err := r.db.ExecContext(ctx, query, v.ID, v.TenantID, v.Code, v.BookingID, v.AmountCents, v.Currency, v.Status, v.CreatedBy, v.ExpiresAt)
 	return err
 }
 
 func (r *VoucherRepository) GetByCode(ctx context.Context, code string) (*domain.Voucher, error) {
 	v := &domain.Voucher{}
-	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, created_by, redeemed_by, expires_at, redeemed_at, created_at
 		FROM vouchers WHERE code=$1`
 	err := r.db.QueryRowContext(ctx, query, code).Scan(
-		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status,
 		&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
 	)
 	if err != nil {
@@ -38,10 +38,10 @@ func (r *VoucherRepository) GetByCode(ctx context.Context, code string) (*domain
 
 func (r *VoucherRepository) GetByID(ctx context.Context, id string) (*domain.Voucher, error) {
 	v := &domain.Voucher{}
-	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, created_by, redeemed_by, expires_at, redeemed_at, created_at
 		FROM vouchers WHERE id=$1`
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status,
 		&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
 	)
 	if err != nil {
@@ -51,7 +51,7 @@ func (r *VoucherRepository) GetByID(ctx context.Context, id string) (*domain.Vou
 }
 
 func (r *VoucherRepository) List(ctx context.Context, tenantID string, limit, offset int) ([]domain.Voucher, error) {
-	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, created_by, redeemed_by, expires_at, redeemed_at, created_at
 		FROM vouchers WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := r.db.QueryContext(ctx, query, tenantID, limit, offset)
 	if err != nil {
@@ -75,10 +75,10 @@ func (r *VoucherRepository) List(ctx context.Context, tenantID string, limit, of
 
 func (r *VoucherRepository) GetByCodeTenant(ctx context.Context, code, tenantID string) (*domain.Voucher, error) {
 	v := &domain.Voucher{}
-	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, qr_code_url, created_by, redeemed_by, expires_at, redeemed_at, created_at
+	query := `SELECT id, tenant_id, code, booking_id, amount_cents, currency, status, created_by, redeemed_by, expires_at, redeemed_at, created_at
 		FROM vouchers WHERE code=$1 AND tenant_id=$2`
 	err := r.db.QueryRowContext(ctx, query, code, tenantID).Scan(
-		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status, &v.QRCodeURL,
+		&v.ID, &v.TenantID, &v.Code, &v.BookingID, &v.AmountCents, &v.Currency, &v.Status,
 		&v.CreatedBy, &v.RedeemedBy, &v.ExpiresAt, &v.RedeemedAt, &v.CreatedAt,
 	)
 	if err != nil {
