@@ -87,7 +87,7 @@ func (r *ShiftRepository) queryShifts(ctx context.Context, query string, args ..
 	}
 	defer rows.Close()
 
-	var shifts []domain.ShiftRecord
+	shifts := make([]domain.ShiftRecord, 0, 16)
 	for rows.Next() {
 		var s domain.ShiftRecord
 		if err := scanShift(rows, &s); err != nil {

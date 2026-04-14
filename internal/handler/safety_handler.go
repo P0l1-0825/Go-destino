@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
@@ -103,5 +104,7 @@ func (h *SafetyHandler) GetIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SafetyHandler) GetEmergencyNumbers(w http.ResponseWriter, r *http.Request) {
-	response.JSON(w, http.StatusOK, domain.EmergencyNumbers)
+	// Emergency numbers are compiled into the binary at build time and never
+	// change at runtime; cache aggressively (1 hour) with ETag support.
+	response.CachedJSON(w, r, http.StatusOK, domain.EmergencyNumbers, time.Hour)
 }

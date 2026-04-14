@@ -113,7 +113,9 @@ func (r *TicketRepository) queryTickets(ctx context.Context, query string, args 
 	}
 	defer rows.Close()
 
-	var tickets []domain.Ticket
+	// Pre-allocate with a reasonable initial capacity to avoid repeated
+	// backing-array copies on the first ~8 rows (the most common page size).
+	tickets := make([]domain.Ticket, 0, 16)
 	for rows.Next() {
 		var t domain.Ticket
 		if err := scanTicket(rows, &t); err != nil {

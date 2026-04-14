@@ -134,7 +134,7 @@ func (r *DriverRepository) ListByTenant(ctx context.Context, tenantID string) ([
 	}
 	defer rows.Close()
 
-	var drivers []domain.Driver
+	drivers := make([]domain.Driver, 0, 32)
 	for rows.Next() {
 		var d domain.Driver
 		if err := rows.Scan(
@@ -161,7 +161,7 @@ func (r *DriverRepository) GetActiveLocations(ctx context.Context, tenantID stri
 	}
 	defer rows.Close()
 
-	var locs []domain.DriverLocation
+	locs := make([]domain.DriverLocation, 0, 32)
 	for rows.Next() {
 		var loc domain.DriverLocation
 		if err := rows.Scan(&loc.DriverID, &loc.Lat, &loc.Lng, &loc.Heading, &loc.Speed, &loc.Timestamp); err != nil {
@@ -183,7 +183,7 @@ func (r *DriverRepository) ListByCompany(ctx context.Context, companyID, tenantI
 	}
 	defer rows.Close()
 
-	var drivers []domain.Driver
+	drivers := make([]domain.Driver, 0, 16)
 	for rows.Next() {
 		var d domain.Driver
 		if err := rows.Scan(

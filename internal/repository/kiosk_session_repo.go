@@ -26,18 +26,22 @@ func (r *KioskSessionRepository) Create(ctx context.Context, s *domain.KioskSess
 }
 
 func (r *KioskSessionRepository) End(ctx context.Context, id, outcome, bookingID string, steps int, endedAt *time.Time) error {
-	durationMs := int64(0)
-	if endedAt != nil {
-		// Calculate duration from started_at
-		var startedAt time.Time
-		err := r.db.QueryRowContext(ctx, `SELECT started_at FROM kiosk_sessions WHERE id = $1`, id).Scan(&startedAt)
-		if err == nil {
-			durationMs = endedAt.Sub(startedAt).Milliseconds()
-		}
-	}
-
-	query := `UPDATE kiosk_sessions SET ended_at = $1, outcome = $2, booking_id = $3, step_count = $4, duration_ms = $5 WHERE id = $6`
-	_, err := r.db.ExecContext(ctx, query, endedAt, outcome, bookingID, steps, durationMs, id)
+	// Calculate duration inside the UPDATE using the stored started_at value,
+	// eliminating the extra SELECT round-trip that was previously needed.
+	// EXTRACT(EPOCH …) returns fractional seconds; multiply by 1000 for ms.
+	query := `
+		UPDATE kiosk_sessions
+		SET ended_at    = $1,
+		    outcome     = $2,
+		    booking_id  = $3,
+		    step_count  = $4,
+		    duration_ms = CASE
+		                    WHEN $1 IS NOT NULL
+		                    THEN EXTRACT(EPOCH FROM ($1::timestamptz - started_at)) * 1000
+		                    ELSE 0
+		                  END
+		WHERE id = $5`
+	_, err := r.db.ExecContext(ctx, query, endedAt, outcome, bookingID, steps, id)
 	return err
 }
 

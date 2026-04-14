@@ -94,7 +94,14 @@ func (s *AuthService) Register(ctx context.Context, tenantID string, req domain.
 		return nil, fmt.Errorf("email already registered")
 	}
 
-	// Validate role
+	// SECURITY: Self-registration always gets USUARIO role.
+	// Elevated roles can only be assigned via admin CreateUser endpoint.
+	if req.Role != domain.RoleUsuario && req.Role != "" {
+		req.Role = domain.RoleUsuario
+	}
+	if req.Role == "" {
+		req.Role = domain.RoleUsuario
+	}
 	if !validRole(req.Role) {
 		return nil, fmt.Errorf("invalid role: %s", req.Role)
 	}

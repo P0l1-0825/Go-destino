@@ -218,7 +218,7 @@ func (r *BookingRepository) queryBookings(ctx context.Context, query string, arg
 	}
 	defer rows.Close()
 
-	var bookings []domain.Booking
+	bookings := make([]domain.Booking, 0, 32)
 	for rows.Next() {
 		var b domain.Booking
 		if err := scanBooking(rows, &b); err != nil {

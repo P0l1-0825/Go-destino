@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -31,13 +32,15 @@ func (bl *RedisTokenBlacklist) Revoke(jti string, expiresAt time.Time) {
 }
 
 // IsRevoked checks if a token JTI has been revoked.
+// SECURITY: Fails CLOSED on Redis error — revoked tokens stay revoked even during outages.
 func (bl *RedisTokenBlacklist) IsRevoked(jti string) bool {
 	ctx := context.Background()
 	result, err := bl.rdb.Exists(ctx, bl.prefix+jti).Result()
 	if err != nil {
-		// On Redis error, fail open (same behavior as in-memory on miss).
-		// The JWT will still be validated by expiration time.
-		return false
+		// Fail CLOSED: if Redis is unreachable, treat token as revoked.
+		// This prevents previously revoked tokens from being accepted during outages.
+		log.Printf("[SECURITY] Redis blacklist check failed for JTI %s: %v — failing closed", jti[:8], err)
+		return true
 	}
 	return result > 0
 }

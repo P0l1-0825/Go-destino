@@ -217,18 +217,27 @@ func New(
 	mux.Handle("POST /api/v1/concesiones/{id}/staff", applyAuthPerm(authSvc, domain.PermConcesionStaffManage, http.HandlerFunc(concesionH.AssignStaff)))
 	mux.Handle("DELETE /api/v1/concesiones/{id}/staff/{userId}", applyAuthPerm(authSvc, domain.PermConcesionStaffManage, http.HandlerFunc(concesionH.RemoveStaff)))
 
-	// Apply global middleware (order matters: outermost runs first)
+	// Apply global middleware.
+	// Execution order (outermost → innermost):
+	//   Recovery → CORS → RequestID → Logging → RateLimit → SecurityHeaders → mux
+	//
+	// Recovery must be outermost so it catches panics from every layer including
+	// CORS pre-flight handling.  CORS comes next so pre-flight OPTIONS requests
+	// get a proper response before hitting the rate limiter or auth checks.
+	// RateLimit is placed after Logging so every request (including 429s) is
+	// logged with its duration; SecurityHeaders is innermost so headers are
+	// added as close to the actual response as possible.
 	var h http.Handler = mux
 	h = middleware.SecurityHeaders(h)
 	h = middleware.RateLimit(200, time.Minute)(h)
 	h = middleware.Logging(h)
 	h = middleware.RequestID(h)
-	h = middleware.Recovery(h)
 	if len(corsConfig) > 0 {
 		h = middleware.CORSWithConfig(corsConfig[0])(h)
 	} else {
 		h = middleware.CORS(h)
 	}
+	h = middleware.Recovery(h)
 
 	return h
 }

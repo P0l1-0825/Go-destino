@@ -17,6 +17,27 @@ const (
 	RoleUsuario         UserRole = "USUARIO"
 )
 
+// RoleLevel returns the privilege level of a role (lower = more privileged).
+// Used for role hierarchy enforcement: a user cannot assign a role at or above their own level.
+func RoleLevel(role UserRole) int {
+	switch role {
+	case RoleSuperAdmin:
+		return 0
+	case RoleAdmin:
+		return 1
+	case RoleClienteConcesion, RoleTesoreriaCliente:
+		return 2
+	case RoleMesaControl, RoleOperador:
+		return 3
+	case RoleTaxista, RoleVendedor, RoleBroker:
+		return 4
+	case RoleUsuario:
+		return 5
+	default:
+		return 99
+	}
+}
+
 // User represents an operator, admin, driver, seller, or end-user.
 type User struct {
 	ID           string    `json:"id" db:"id"`

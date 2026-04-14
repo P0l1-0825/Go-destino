@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/P0l1-0825/Go-destino/internal/domain"
 	"github.com/P0l1-0825/Go-destino/internal/middleware"
@@ -56,7 +57,10 @@ func (h *RouteHandler) List(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusOK, routes)
+		// Route lists by transport type are essentially static reference data —
+		// cache for 5 minutes with ETag support so kiosk clients avoid redundant
+		// round-trips on every page load.
+		response.CachedJSON(w, r, http.StatusOK, routes, 5*time.Minute)
 		return
 	}
 
@@ -65,7 +69,8 @@ func (h *RouteHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, routes)
+	// Route catalogue changes rarely; cache for 5 minutes.
+	response.CachedJSON(w, r, http.StatusOK, routes, 5*time.Minute)
 }
 
 func (h *RouteHandler) Update(w http.ResponseWriter, r *http.Request) {

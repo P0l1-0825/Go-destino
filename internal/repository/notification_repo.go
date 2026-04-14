@@ -36,7 +36,7 @@ func (r *NotificationRepository) ListByUser(ctx context.Context, userID string, 
 	}
 	defer rows.Close()
 
-	var notifs []domain.Notification
+	notifs := make([]domain.Notification, 0, 20)
 	for rows.Next() {
 		var n domain.Notification
 		if err := rows.Scan(&n.ID, &n.TenantID, &n.UserID, &n.Channel, &n.Status, &n.Title, &n.Body, &n.BookingID, &n.CreatedAt, &n.SentAt); err != nil {

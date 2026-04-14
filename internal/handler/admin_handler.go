@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -138,6 +139,20 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SECURITY: Role hierarchy enforcement — caller cannot assign a role
+	// equal to or higher than their own. Only SUPER_ADMIN can create SUPER_ADMIN.
+	callerRole, _ := r.Context().Value(middleware.ContextRole).(domain.UserRole)
+	targetRole := req.Role
+	if targetRole == "" {
+		targetRole = domain.RoleUsuario
+	}
+	callerLevel := domain.RoleLevel(callerRole)
+	targetLevel := domain.RoleLevel(targetRole)
+	if targetLevel <= callerLevel && callerRole != domain.RoleSuperAdmin {
+		response.Error(w, http.StatusForbidden, "cannot assign a role equal to or above your own")
+		return
+	}
+
 	user := &domain.User{
 		ID:           uuid.New().String(),
 		TenantID:     tenantID,
@@ -145,14 +160,11 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Phone:        req.Phone,
 		PasswordHash: hash,
 		Name:         req.Name,
-		Role:         req.Role,
+		Role:         targetRole,
 		SubRole:      req.SubRole,
 		CompanyID:    req.CompanyID,
 		Lang:         req.Lang,
 		Active:       true,
-	}
-	if user.Role == "" {
-		user.Role = domain.RoleUsuario
 	}
 	if user.Lang == "" {
 		user.Lang = "es"
@@ -298,7 +310,9 @@ func (h *AdminHandler) ListAirports(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, airports)
+	// Airport list is reference data that changes very rarely; cache for 10 minutes.
+	// The ETag allows clients to skip network payload on cache hits.
+	response.CachedJSON(w, r, http.StatusOK, airports, 10*time.Minute)
 }
 
 func (h *AdminHandler) GetAirport(w http.ResponseWriter, r *http.Request) {
@@ -339,9 +353,11 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 			"permissions":      perms,
 		})
 	}
-	response.JSON(w, http.StatusOK, roles)
+	// Role/permission data is compiled-in and immutable at runtime; cache for 1 hour.
+	response.CachedJSON(w, r, http.StatusOK, roles, time.Hour)
 }
 
 func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
-	response.JSON(w, http.StatusOK, domain.AllPermissions())
+	// Same rationale as ListRoles — immutable binary data.
+	response.CachedJSON(w, r, http.StatusOK, domain.AllPermissions(), time.Hour)
 }

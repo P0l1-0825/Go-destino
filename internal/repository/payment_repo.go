@@ -166,7 +166,7 @@ func (r *PaymentRepository) queryPayments(ctx context.Context, query string, arg
 	}
 	defer rows.Close()
 
-	var payments []domain.Payment
+	payments := make([]domain.Payment, 0, 16)
 	for rows.Next() {
 		var p domain.Payment
 		if err := scanPayment(rows, &p); err != nil {

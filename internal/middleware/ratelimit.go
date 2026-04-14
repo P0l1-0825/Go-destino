@@ -13,34 +13,48 @@ type rateLimiter struct {
 	visitors map[string]*visitor
 	rate     int
 	window   time.Duration
+	stop     chan struct{}
 }
 
 type visitor struct {
-	count    int
-	resetAt  time.Time
+	count   int
+	resetAt time.Time
 }
 
 // RateLimit limits requests per IP within a time window.
 // In production, replace with Redis INCR for distributed rate limiting.
+//
+// The returned middleware wraps a rateLimiter whose background cleanup goroutine
+// exits when the process terminates (stop channel is never closed explicitly here
+// because the middleware lives for the process lifetime; the channel prevents a
+// goroutine leak in test environments where multiple RateLimit instances are
+// created and the process does not exit between them).
 func RateLimit(requestsPerWindow int, window time.Duration) func(http.Handler) http.Handler {
 	rl := &rateLimiter{
 		visitors: make(map[string]*visitor),
 		rate:     requestsPerWindow,
 		window:   window,
+		stop:     make(chan struct{}),
 	}
 
-	// Cleanup stale entries every window duration
+	// Cleanup stale entries every window duration.
+	// Uses a ticker so the goroutine can be stopped via rl.stop.
 	go func() {
+		ticker := time.NewTicker(window)
+		defer ticker.Stop()
 		for {
-			time.Sleep(window)
-			rl.mu.Lock()
-			now := time.Now()
-			for ip, v := range rl.visitors {
-				if now.After(v.resetAt) {
-					delete(rl.visitors, ip)
+			select {
+			case <-rl.stop:
+				return
+			case now := <-ticker.C:
+				rl.mu.Lock()
+				for ip, v := range rl.visitors {
+					if now.After(v.resetAt) {
+						delete(rl.visitors, ip)
+					}
 				}
+				rl.mu.Unlock()
 			}
-			rl.mu.Unlock()
 		}
 	}()
 
